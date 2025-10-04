@@ -36,37 +36,18 @@ jobs:
     - name: Restore Dependencies
       run: |
         echo "Restoring packages..."
-        dotnet restore MeteoMesh.MeteringStation.sln || echo "Restore had issues but continuing..."
+        dotnet restore MeteoMesh5.sln
       
     - name: Build Solution
       run: |
         echo "Building solution..."
-        dotnet build MeteoMesh.MeteringStation.sln --configuration Release --no-restore || echo "Build had issues but continuing..."
+        dotnet build MeteoMesh5.sln --configuration Release --no-restore
       
-    - name: Run Tests (if available)
+    - name: Run Tests
       run: |
-        echo "Attempting to run tests..."
-        if dotnet test MeteoMesh.MeteringStation.sln --list-tests > /dev/null 2>&1; then
-          echo "Tests found, running them..."
-          dotnet test MeteoMesh.MeteringStation.sln --configuration Release --no-build --verbosity minimal --logger trx --collect:"XPlat Code Coverage" || echo "Some tests failed but continuing..."
-        else
-          echo "No tests found or test discovery failed, skipping..."
-        fi
+        echo "Running tests..."
+        dotnet test MeteoMesh5.sln --configuration Release --no-build --verbosity normal
         
-    - name: Upload Test Results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: test-results
-        path: '**/*.trx'
-        
-    - name: Upload Coverage Reports
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: coverage-reports
-        path: '**/coverage.cobertura.xml'
-
   build-images:
     name: Build Docker Images
     runs-on: ubuntu-latest
@@ -167,6 +148,13 @@ jobs:
         component: [central-server, local-node, temperature-station, humidity-station, pressure-station, lidar-station]
     
     steps:
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       continue-on-error: true
@@ -175,9 +163,20 @@ jobs:
         format: 'sarif'
         output: 'trivy-results-${{ matrix.component }}.sarif'
         
+    - name: Check if SARIF file exists
+      id: sarif-check
+      run: |
+        if [ -f "trivy-results-${{ matrix.component }}.sarif" ]; then
+          echo "sarif-exists=true" >> $GITHUB_OUTPUT
+          echo "✅ SARIF file generated for ${{ matrix.component }}"
+        else
+          echo "sarif-exists=false" >> $GITHUB_OUTPUT
+          echo "⚠️ SARIF file not found for ${{ matrix.component }}"
+        fi
+        
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
-      if: always()
+      if: steps.sarif-check.outputs.sarif-exists == 'true'
       continue-on-error: true
       with:
         sarif_file: 'trivy-results-${{ matrix.component }}.sarif'
@@ -214,4 +213,4 @@ jobs:
       run: |
         echo "🎯 Deploying MeteoMesh5 to production environment"
         echo "Branch: ${{ github.ref }}"
-        echo "Commit: ${{ github.sha }}"
+        echo "Commit: ${{ github.sha }}"        echo "Commit: ${{ github.sha }}"
