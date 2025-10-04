@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
 # Copy solution file and project files
-COPY MeteoMesh.MeteringStation.sln .
+COPY MeteoMesh5.sln .
 COPY MeteoMesh5.LidarStation/MeteoMesh5.LidarStation.csproj MeteoMesh5.LidarStation/
 COPY MeteoMesh5.Shared/MeteoMesh5.Shared.csproj MeteoMesh5.Shared/
 

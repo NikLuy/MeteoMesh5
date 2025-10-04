@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
 # Copy solution file and project files first for better layer caching
-COPY MeteoMesh.MeteringStation.sln .
+COPY MeteoMesh5.sln .
 COPY MeteoMesh5.LocalNode/MeteoMesh5.LocalNode.csproj MeteoMesh5.LocalNode/
 COPY MeteoMesh5.Shared/MeteoMesh5.Shared.csproj MeteoMesh5.Shared/
 
@@ -45,4 +45,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Expose ports
 EXPOSE 8080 8443 7200
 
-ENTRYPOINT ["dotner","MeteoMesh5.LocalNode.dll"]
+ENTRYPOINT ["dotnet", "MeteoMesh5.LocalNode.dll"]

@@ -42,7 +42,21 @@ dotnet test
 dotnet test MeteoMesh5.CentralServer.Tests
 ```
 
+### Docker-Entwicklung (Optional)
+
+Für lokale Docker-Entwicklung können Sie auch Docker Compose verwenden:
+
+```bash
+# Alle Services mit Docker Compose starten
+docker-compose up --build
+
+# Nur spezifische Services starten
+docker-compose up central-server local-node
+```
+
 ## Konfiguration (appsettings.json)
+
+### MeteoMesh5.Host (Aspire AppHost) Konfiguration
 
 Die Hauptkonfiguration erfolgt in `MeteoMesh5.Host/appsettings.json`:
 
@@ -85,35 +99,32 @@ Die Hauptkonfiguration erfolgt in `MeteoMesh5.Host/appsettings.json`:
 }
 ```
 
-### MeteoMesh5.Host spezifische Konfiguration
+#### Konfigurationsparameter:
 
-#### AppConfig
+**CentralServers:**
+- `Id`: Eindeutige Kennung des zentralen Servers
+- `Name`: Anzeigename des Servers
+- `Port`: HTTPS-Port für den Server
 
-- `CentralServers`: Liste der zentralen Server
-  - `Id`: Eindeutige Kennung des zentralen Servers
-  - `Name`: Anzeigename des Servers
-  - `Port`: HTTPS-Port für den Server
+**LocalNodes:**
+- `Id`: Eindeutige numerische ID des Knotens
+- `Name`: Anzeigename des Knotens
+- `Port`: Basis-Port für den Knoten (Stationen verwenden Port+1000, Port+2000, etc.)
+- `CentralUrl`: URL des zentralen Servers
+- `Coordinates`: GPS-Koordinaten (Latitude/Longitude/Altitude)
+- `StationInactiveMinutes`: Timeout für inaktive Stationen in Minuten
+- `Stations`: Array von Stationen mit ID und Typ
 
-- `LocalNodes`: Liste der lokalen Knoten
-  - `Id`: Eindeutige numerische ID des Knotens
-  - `Name`: Anzeigename des Knotens
-  - `Port`: Basis-Port für den Knoten (Stationen verwenden Port+1000, Port+2000, etc.)
-  - `CentralUrl`: URL des zentralen Servers
-  - `Coordinates`: GPS-Koordinaten (Latitude/Longitude/Altitude)
-  - `StationInactiveMinutes`: Timeout für inaktive Stationen in Minuten
-  - `Stations`: Array von Stationen mit ID und Typ
-
-- `Simulation`: Simulationskonfiguration
-  - `StartTime`: Startzeitpunkt der Simulation (ISO 8601 Format)
-  - `SpeedMultiplier`: Geschwindigkeitsmultiplikator (60.0 = 1 Minute = 1 Stunde)
-  - `UseSimulation`: true für Simulationsmodus, false für echte Sensoren
-
-#### Verfügbare Stationstypen:
-
+**Station Types:**
 - `0` = Temperaturstation
 - `1` = Feuchtigkeitsstation  
 - `2` = Druckstation
 - `3` = Lidar-Station
+
+**Simulation:**
+- `StartTime`: Startzeitpunkt der Simulation (ISO 8601 Format)
+- `SpeedMultiplier`: Geschwindigkeitsmultiplikator (60.0 = 1 Minute = 1 Stunde)
+- `UseSimulation`: true für Simulationsmodus, false für echte Sensoren
 
 ### Einzelne Service-Konfiguration
 
@@ -174,6 +185,21 @@ Das Projekt verwendet GitHub Actions für CI/CD mit automatischen Docker-Image-B
 - GitHub Container Registry wird für Image-Speicherung verwendet
 - Kubernetes-Manifeste verfügbar für Produktionsorchestration
 
+### Lokales Docker-Deployment
+```bash
+# Alle Services bauen und starten
+docker-compose up --build
+
+# Services im Hintergrund starten
+docker-compose up -d
+
+# Logs anzeigen
+docker-compose logs -f
+
+# Services stoppen
+docker-compose down
+```
+
 ## Projektstruktur
 
 - `MeteoMesh5.CentralServer/` - Hauptanwendung (Blazor Server)
@@ -190,3 +216,16 @@ Das Projekt verwendet GitHub Actions für CI/CD mit automatischen Docker-Image-B
 3. Konfiguration in `MeteoMesh5.Host/appsettings.json` anpassen
 4. Projekt starten: `dotnet run --project MeteoMesh5.Host`
 5. Aspire-Dashboard im Browser öffnen (URL wird in der Konsole angezeigt)
+
+## Troubleshooting
+
+### Docker Build Probleme
+Falls Docker-Builds fehlschlagen, stellen Sie sicher, dass:
+- Alle Dockerfiles die korrekte Solution-Datei `MeteoMesh5.sln` referenzieren
+- Docker Desktop läuft und ausreichend Ressourcen hat
+- Alle .NET 9 Abhängigkeiten verfügbar sind
+
+### Aspire Dashboard Probleme
+- Stellen Sie sicher, dass alle Ports (7000-8000 Range) verfügbar sind
+- Überprüfen Sie die Firewall-Einstellungen
+- Kontrollieren Sie die Konfiguration in `appsettings.json`
