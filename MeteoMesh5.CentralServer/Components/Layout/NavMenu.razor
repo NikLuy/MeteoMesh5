@@ -1,0 +1,42 @@
+﻿@using Microsoft.AspNetCore.Components.Routing
+@inject NavigationManager Navigation
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-meteo">
+    <div class="container">
+        <a class="navbar-brand fw-semibold d-flex align-items-center gap-2 me-3" href="/">
+            <i class="bi bi-cloud-sun"></i>
+            <span>MeteoMesh 5.0</span>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Menü öffnen">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div id="mainNav" class="collapse navbar-collapse">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                        <i class="bi bi-house-door me-1"></i>Home
+                    </NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="/data">
+                        <i class="bi bi-graph-up me-1"></i>Data Analysis
+                    </NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="/map">
+                        <i class="bi bi-geo-alt me-1"></i>Network Map
+                    </NavLink>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+@code {
+    private void RefreshData()
+    {
+        // Force page refresh
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+    }
+}

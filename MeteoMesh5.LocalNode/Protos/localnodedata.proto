@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+option csharp_namespace = "MeteoMesh5.LocalNode.Grpc";
+
+package meteomesh5localnode;
+
+// LocalNode Data Service for MeteoMesh5
+service LocalNodeDataService {
+  rpc QueryMeasurements (MeasurementQueryRequest) returns (MeasurementQueryResponse);
+  rpc GetStations (StationQueryRequest) returns (StationQueryResponse);
+  rpc GetHealthStatus (HealthStatusRequest) returns (HealthStatusResponse);
+}
+
+// Query measurements from this LocalNode
+message MeasurementQueryRequest {
+  string station_id = 1; // optional - specific station
+  int64 from_timestamp = 2; // optional (unix seconds)
+  int64 to_timestamp = 3;   // optional (unix seconds)
+  int32 max_records = 4;    // limit results (default 500)
+}
+
+message MeasurementQueryResponse {
+  bool success = 1;
+  string message = 2;
+  repeated MeasurementRecord measurements = 3;
+  int32 total_count = 4;
+}
+
+message MeasurementRecord {
+  int64 timestamp = 1;
+  string station_id = 2;
+  string station_type = 3;
+  double value = 4; // primary sensor value
+  double aux1 = 5;  // secondary value (e.g. visibility)
+  double aux2 = 6;  // reserved for future
+  // reserved 7 (was boolean flag for rain)
+  string quality = 8;
+  double precipitation_intensity = 9; // mm/h (0 = none)
+}
+
+// Query stations from this LocalNode
+message StationQueryRequest {
+  // Empty for now - returns all stations
+}
+
+message StationQueryResponse {
+  bool success = 1;
+  string message = 2;
+  repeated StationRecord stations = 3;
+}
+
+message StationRecord {
+  string station_id = 1;
+  string station_type = 2;
+  bool is_active = 3;
+  int64 last_update = 4;
+  double last_value = 5;
+  string quality = 6;
+}
+
+// Health status
+message HealthStatusRequest {
+  // Empty for now
+}
+
+message HealthStatusResponse {
+  bool is_healthy = 1;
+  int32 station_count = 2;
+  int32 measurement_count = 3;
+  int64 last_measurement_time = 4;
+  string status_message = 5;
+}

@@ -1,0 +1,212 @@
+﻿@page "/"
+@inject LocalNodeManager nodeManager
+@inject NavigationManager Nav
+@inject TimeProvider timeProvider
+@implements IDisposable
+
+<PageTitle>MeteoMesh5 - Central Server</PageTitle>
+
+<section class="hero container my-4 p-4 p-lg-5">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="display-6 fw-bold mb-2">
+                <i class="bi bi-cloud-sun me-2"></i>Central Server
+            </h1>
+        </div>
+        <div class="d-flex gap-3">
+            <button class="btn btn-outline-sky" @onclick="RefreshData" >
+                <i class="bi bi-arrow-clockwise me-1"></i>
+            </button>
+        </div>
+    </div>  
+</section>
+
+
+<!-- Local Nodes Overview -->
+<section class="container mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="m-0">
+            <i class="bi bi-hdd-network me-2"></i>
+            Connected Local Nodes
+        </h3>
+        <div class="d-flex gap-2">
+            <span class="badge badge-sky">@nodes.Count(n => n.IsOnline) Online</span>
+            <span class="badge badge-warn">@nodes.Count(n => !n.IsOnline) Offline</span>
+        </div>
+    </div>
+    
+    <div class="tile p-0">
+        @if (nodes.Any())
+        {
+            <div class="table-responsive">
+                <table class="table align-middle m-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Node ID</th>
+                            <th>Name</th>
+                            <th>Location</th>
+                            <th>Stations</th>
+                            <th>Status</th>
+                            <th>Last Seen</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var node in nodes)
+                        {
+                            <tr class="@GetNodeRowClass(node)">
+                                <td>
+                                    <i class="bi bi-hdd-network me-1"></i>
+                                    <code>@node.NodeId</code>
+                                </td>
+                                <td>@node.Name</td>
+                                <td>
+                                    @node.Location
+                                    @if (node.Latitude.HasValue && node.Longitude.HasValue)
+                                    {
+                                        <small class="text-muted d-block">@node.Latitude.Value.ToString("F4"), @node.Longitude.Value.ToString("F4")</small>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge badge-info">@node.Stations.Count Total</span>
+                                    <span class="badge badge-sky">@GetActiveStationCount(node) Active</span>
+                                    @if (GetSuspendedStationCount(node) > 0)
+                                    {
+                                        <span class="badge badge-warn">@GetSuspendedStationCount(node) Suspended</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (node.IsOnline)
+                                    {
+                                        <span class="text-success">
+                                            <i class="bi bi-check-circle"></i> Online
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-danger">
+                                            <i class="bi bi-exclamation-circle"></i> Offline
+                                        </span>
+                                    }
+                                </td>
+                                <td>
+                                    @node.LastSeen.ToString("yyyy-MM-dd HH:mm:ss")
+                                    <small class="text-muted d-block">@GetTimeSinceLastSeen(node)</small>
+                                </td>
+                                <td>
+                                    <button class="btn btn-outline-sky btn-sm" @onclick="() => ViewNodeDetails(node.NodeId)">
+                                        <i class="bi bi-eye me-1"></i>Details
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-hdd-network fs-1 d-block mb-2"></i>
+                <h5 class="mt-3">No Local Nodes Registered</h5>
+                <p class="muted">Local nodes will automatically appear here when they register with this CentralServer.</p>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private DateTime lastUpdate;
+    private List<LocalNodeInfo> nodes = new();
+    private Timer? refreshTimer;
+
+    protected override void OnInitialized()
+    {
+        RefreshData();
+        
+        // Set up auto-refresh every 60 seconds (should be faster than heartbeat timeout)
+        refreshTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(() =>
+            {
+                RefreshData();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+    }
+
+    private void RefreshData()
+    {
+        lastUpdate = timeProvider.GetUtcNow().UtcDateTime;
+        nodes = nodeManager.GetAllNodes().OrderBy(n => n.NodeId).ToList();
+    }
+
+    private int GetTotalActiveStations()
+    {
+        return nodes.SelectMany(n => n.Stations).Count(s => s.IsActive && !s.Suspended);
+    }
+
+    private int GetActiveStationCount(LocalNodeInfo node)
+    {
+        return node.Stations.Count(s => s.IsActive && !s.Suspended);
+    }
+
+    private int GetSuspendedStationCount(LocalNodeInfo node)
+    {
+        return node.Stations.Count(s => s.Suspended);
+    }
+
+    private string GetOverallHealthStatus()
+    {
+        if (!nodes.Any()) return "No Data";
+        
+        var onlineCount = nodes.Count(n => n.IsOnline);
+        var totalCount = nodes.Count;
+        
+        if (onlineCount == totalCount) return "Healthy";
+        if (onlineCount == 0) return "Critical";
+        return "Warning";
+    }
+
+    private string GetOverallHealthColor()
+    {
+        var status = GetOverallHealthStatus();
+        return status switch
+        {
+            "Healthy" => "success",
+            "Critical" => "danger",
+            "Warning" => "warning",
+            _ => "muted"
+        };
+    }
+
+    private string GetNodeRowClass(LocalNodeInfo node)
+    {
+        if (!node.IsOnline) return "table-warning";
+        return "";
+    }
+
+    private string GetTimeSinceLastSeen(LocalNodeInfo node)
+    {
+        var currentTime = timeProvider.GetUtcNow().UtcDateTime;
+        var timeSince = currentTime - node.LastSeen;
+        
+        if (timeSince.TotalMinutes < 1)
+            return "just now";
+        if (timeSince.TotalMinutes < 60)
+            return $"{timeSince.Minutes} minutes ago";
+        if (timeSince.TotalHours < 24)
+            return $"{timeSince.Hours} hours ago";
+        return $"{timeSince.Days} days ago";
+    }
+
+    private void ViewNodeDetails(string nodeId)
+    {
+        Nav.NavigateTo($"/node/{Uri.EscapeDataString(nodeId)}");
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+}

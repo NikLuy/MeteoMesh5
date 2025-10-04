@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Sdk Name="Aspire.AppHost.Sdk" Version="9.3.1" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>60371d7f-85d7-4e71-b01d-af59c2719a9b</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="9.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MeteoMesh5.CentralServer\MeteoMesh5.CentralServer.csproj" />
+    <ProjectReference Include="..\MeteoMesh5.HumidityStation\MeteoMesh5.HumidityStation.csproj" />
+    <ProjectReference Include="..\MeteoMesh5.LidarStation\MeteoMesh5.LidarStation.csproj" />
+    <ProjectReference Include="..\MeteoMesh5.LocalNode\MeteoMesh5.LocalNode.csproj" />
+    <ProjectReference Include="..\MeteoMesh5.PressureStation\MeteoMesh5.PressureStation.csproj" />
+    <ProjectReference Include="..\MeteoMesh5.TemperatureStation\MeteoMesh5.TemperatureStation.csproj" />
+  </ItemGroup>
+
+</Project>

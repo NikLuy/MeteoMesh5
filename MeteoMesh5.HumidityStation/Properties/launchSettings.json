@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "MeteoMesh5.HumidityStation": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      //"applicationUrl": "https://localhost:62228;http://localhost:62229",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

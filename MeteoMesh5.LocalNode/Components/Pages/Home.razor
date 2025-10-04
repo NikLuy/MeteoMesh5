@@ -1,0 +1,484 @@
+﻿@page "/"
+@using MeteoMesh5.LocalNode.Models
+@using MeteoMesh5.LocalNode.Services
+@using MeteoMesh5.Shared.Models
+@using Microsoft.Extensions.Options
+@using Microsoft.EntityFrameworkCore
+@inject MeteoMesh5.LocalNode.Data.AppDbContext Db
+@inject StationRegistry StationRegistry
+@inject IOptions<LocalNodeConfig> NodeConfig
+@inject IOptions<SimulationOptions> SimulationConfig
+@inject TimeProvider TimeProvider
+@implements IDisposable
+
+<PageTitle>MeteoMesh5 LocalNode Dashboard</PageTitle>
+
+<section class="hero container my-4 p-4 p-lg-5">
+    <div class="row align-items-center g-4">
+        <div class="col-lg-8">
+            <h1 class="display-6 fw-bold mb-2">Dashboard</h1>
+            <div class="mt-3">
+                <span class="badge badge-sky">@totalMeasurements Messungen</span>
+                @if (SimulationConfig.Value?.UseSimulation == true)
+                {
+                    <span class="badge badge-warn">Simulation @(SimulationConfig.Value.SpeedMultiplier)x</span>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Station Type Overview -->
+<section class="container mb-5">
+
+</section>
+
+<!-- Active Stations Details -->
+<section class="container mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="m-0">
+            <i class="bi bi-broadcast-pin me-2"></i>
+            Registrierte Stationen
+        </h3>
+        <div class="d-flex gap-2">
+            <span class="badge badge-sky">@GetActiveStationCount() Aktiv</span>
+            <span class="badge badge-info">@GetSuspendedStationCount() Suspended</span>
+            <span class="badge badge-warn">@GetInactiveStationCount() Inaktiv</span>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-3">
+            <div class="tile p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-uppercase small muted">Live</div>
+                        <div class="fs-5 fw-semibold">Temperature</div>
+                        <div class="text-danger fw-bold">@GetStationCount(StationType.Temperature)</div>
+                    </div>
+                    <i class="bi bi-thermometer-half fs-2 text-danger"></i>
+                </div>
+                <div class="mt-2">
+                    <small class="muted">@GetLastValue(StationType.Temperature)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-3">
+            <div class="tile p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-uppercase small muted">Live</div>
+                        <div class="fs-5 fw-semibold">Humidity</div>
+                        <div class="text-info fw-bold">@GetStationCount(StationType.Humidity)</div>
+                    </div>
+                    <i class="bi bi-droplet-fill fs-2 text-info"></i>
+                </div>
+                <div class="mt-2">
+                    <small class="muted">@GetLastValue(StationType.Humidity)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-3">
+            <div class="tile p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-uppercase small muted">Live</div>
+                        <div class="fs-5 fw-semibold">Pressure</div>
+                        <div class="text-primary fw-bold">@GetStationCount(StationType.Pressure)</div>
+                    </div>
+                    <i class="bi bi-speedometer2 fs-2 text-primary"></i>
+                </div>
+                <div class="mt-2">
+                    <small class="muted">@GetLastValue(StationType.Pressure)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-3">
+            <div class="tile p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-uppercase small muted">Live</div>
+                        <div class="fs-5 fw-semibold">Lidar</div>
+                        <div class="text-success fw-bold">@GetStationCount(StationType.Lidar)</div>
+                    </div>
+                    <i class="bi bi-cloud-rain fs-2 text-success"></i>
+                </div>
+                <div class="mt-2">
+                    <small class="muted">@GetLastValue(StationType.Lidar)</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tile p-0">
+        @if (allStations.Any())
+        {
+            <div class="table-responsive">
+                <table class="table align-middle m-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Station ID</th>
+                            <th>Typ</th>
+                            <th>Interval (min)</th>
+                            <th>Status</th>
+                            <th>Letzter Wert</th>
+                            <th>Letzte Aktualisierung</th>
+                            <th>Inaktiv seit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var station in allStations)
+                        {
+                            var isActive = IsStationActive(station);
+                            var timeSinceLastUpdate = GetTimeSinceLastUpdate(station);
+                            
+                            <tr class="@GetStationRowClass(station, isActive)">
+                                <td>
+                                    <i class="bi bi-broadcast-pin me-1"></i>
+                                    <code>@station.StationId</code>
+                                </td>
+                                <td>
+                                    <span class="badge @GetTypeBadgeClass(station.Type)">@station.Type</span>
+                                </td>
+                                <td>
+                                    <span class="@(station.Type == StationType.Temperature && station.IntervalMinutes < 15 ? "text-warning fw-bold" : "")">
+                                        @station.IntervalMinutes
+                                        @if (station.Type == StationType.Temperature && station.IntervalMinutes < 15)
+                                        {
+                                            <small class="muted">(High P)</small>
+                                        }
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (station.Suspended)
+                                    {
+                                        <span class="text-warning">
+                                            <i class="bi bi-pause-circle"></i> Suspended
+                                        </span>
+                                    }
+                                    else if (isActive)
+                                    {
+                                        <span class="text-success">
+                                            <i class="bi bi-check-circle"></i> Active
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-danger">
+                                            <i class="bi bi-exclamation-circle"></i> Inactive
+                                        </span>
+                                    }
+                                </td>
+                                <td>@FormatStationValue(station)</td>
+                                <td>@station.LastUpdated.ToString("HH:mm:ss")</td>
+                                <td>
+                                    @if (!isActive && !station.Suspended)
+                                    {
+                                        <span class="text-danger">
+                                            @FormatTimeSince(timeSinceLastUpdate)
+                                            @if (SimulationConfig.Value?.UseSimulation == true)
+                                            {
+                                                <small class="d-block muted">(@timeSinceLastUpdate.TotalMinutes.ToString("F1")min vs @(stationInactiveMinutes)min limit)</small>
+                                            }
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-broadcast-pin fs-1 d-block mb-2"></i>
+                <div class="muted">Noch keine Stationen registriert. Warten auf Sensor-Daten...</div>
+            </div>
+        }
+    </div>
+</section>
+
+<!-- Recent Measurements -->
+<section class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="m-0">
+            <i class="bi bi-activity me-2"></i>
+            Aktuelle Messwerte
+        </h3>
+        <a class="btn btn-outline-sky btn-sm" href="/messungen">
+            <i class="bi bi-table me-1"></i>Alle anzeigen
+        </a>
+    </div>
+    
+    <div class="tile p-0">
+        @if (recentMeasurements.Any())
+        {
+            <div class="table-responsive">
+                <table class="table align-middle m-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Zeit</th>
+                            <th>Station</th>
+                            <th>Typ</th>
+                            <th>Wert</th>
+                            <th>Flag</th>
+                            <th>Qualität</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var measurement in recentMeasurements.Take(10))
+                        {
+                            <tr>
+                                <td>@measurement.Timestamp.ToString("HH:mm:ss")</td>
+                                <td><code>@measurement.StationId</code></td>
+                                <td>
+                                    <span class="badge @GetTypeBadgeClass(GetStationType(measurement.StationId))">@GetStationType(measurement.StationId)</span>
+                                </td>
+                                <td>@FormatMeasurementValue(measurement)</td>
+                                <td>
+                                    @if (GetStationType(measurement.StationId) == StationType.Lidar)
+                                    {
+                                        if (measurement.Flag)
+                                        {
+                                            <i class="bi bi-cloud-rain text-primary"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-sun text-warning"></i>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        @if (measurement.Flag)
+                                        {
+                                            <i class="bi bi-check-circle text-success"></i>
+                                        }
+                                        else
+                                        {
+                                            <span class="muted">—</span>
+                                        }
+                                    }
+                                </td>
+                                <td>
+                                    <span class="@(measurement.Quality == "Good" ? "text-success" : "text-warning")">@measurement.Quality</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-activity fs-1 d-block mb-2"></i>
+                <div class="muted">Noch keine Messungen empfangen</div>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private DateTime lastUpdate = DateTime.Now;
+    private List<Station> allStations = new();
+    private List<Measurement> recentMeasurements = new();
+    private int totalMeasurements = 0;
+    private System.Threading.Timer? refreshTimer;
+    private int stationInactiveMinutes;
+
+    protected override void OnInitialized()
+    {
+        stationInactiveMinutes = NodeConfig.Value?.StationInactiveMinutes ?? 60;
+        RefreshData();
+        
+        // Calculate adaptive refresh interval based on simulation speed
+        var simulationSpeed = SimulationConfig.Value?.SpeedMultiplier ?? 1.0;
+        var useSimulation = SimulationConfig.Value?.UseSimulation ?? false;
+        
+        // In simulation mode with high speed, refresh more frequently to keep up with fast time
+        // Base refresh: 5 seconds, but scale down with simulation speed
+        var baseRefreshSeconds = 5.0;
+        var adaptiveRefreshSeconds = useSimulation && simulationSpeed > 1.0 
+            ? Math.Max(1.0, baseRefreshSeconds / Math.Sqrt(simulationSpeed)) // Use square root to prevent too aggressive scaling
+            : baseRefreshSeconds;
+            
+        var refreshInterval = TimeSpan.FromSeconds(adaptiveRefreshSeconds);
+        
+        refreshTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                RefreshData();
+                StateHasChanged();
+            });
+        }, null, refreshInterval, refreshInterval);
+    }
+
+    private void RefreshData()
+    {
+        lastUpdate = TimeProvider.GetUtcNow().UtcDateTime;
+        
+        // Always get fresh station data to ensure LastUpdated is current
+        allStations = Db.Stations
+            .AsNoTracking() // Use AsNoTracking for better performance
+            .OrderBy(s => s.Type)
+            .ThenBy(s => s.StationId)
+            .ToList();
+            
+        recentMeasurements = Db.Measurements
+            .AsNoTracking()
+            .OrderByDescending(m => m.Timestamp)
+            .Take(50)
+            .ToList();
+            
+        totalMeasurements = Db.Measurements.Count();
+    }
+
+    private bool IsStationActive(Station station)
+    {
+        if (station.Suspended) return false;
+        
+        // For accurate activity detection, especially in fast simulation mode,
+        // we need to check against the most recent LastUpdated timestamp
+        var currentTime = TimeProvider.GetUtcNow().UtcDateTime;
+        var timeSinceLastUpdate = currentTime - station.LastUpdated;
+        
+        // In simulation mode, we might need more frequent checks
+        var isSimulation = SimulationConfig.Value?.UseSimulation ?? false;
+        if (isSimulation && timeSinceLastUpdate.TotalMinutes > stationInactiveMinutes)
+        {
+            // Double-check with fresh data from database in simulation mode
+            var freshStation = Db.Stations.AsNoTracking().FirstOrDefault(s => s.StationId == station.StationId);
+            if (freshStation != null)
+            {
+                var freshTimeSince = currentTime - freshStation.LastUpdated;
+                return freshTimeSince.TotalMinutes <= stationInactiveMinutes;
+            }
+        }
+        
+        return timeSinceLastUpdate.TotalMinutes <= stationInactiveMinutes;
+    }
+
+    private TimeSpan GetTimeSinceLastUpdate(Station station)
+    {
+        var currentTime = TimeProvider.GetUtcNow().UtcDateTime;
+        
+        // In simulation mode, get fresh data for accurate timing
+        var isSimulation = SimulationConfig.Value?.UseSimulation ?? false;
+        if (isSimulation)
+        {
+            var freshStation = Db.Stations.AsNoTracking().FirstOrDefault(s => s.StationId == station.StationId);
+            if (freshStation != null)
+            {
+                return currentTime - freshStation.LastUpdated;
+            }
+        }
+        
+        return currentTime - station.LastUpdated;
+    }
+
+    private string FormatTimeSince(TimeSpan timeSpan)
+    {
+        if (timeSpan.TotalDays >= 1)
+            return $"{timeSpan.Days}d {timeSpan.Hours}h";
+        if (timeSpan.TotalHours >= 1)
+            return $"{timeSpan.Hours}h {timeSpan.Minutes}m";
+        return $"{timeSpan.Minutes}m {timeSpan.Seconds}s";
+    }
+
+    private int GetActiveStationCount()
+    {
+        return allStations.Count(IsStationActive);
+    }
+
+    private int GetInactiveStationCount()
+    {
+        return allStations.Count(s => !IsStationActive(s) && !s.Suspended);
+    }
+    private int GetSuspendedStationCount()
+    {
+        return allStations.Count(s => s.Suspended);
+    }
+
+    private int GetStationCount(StationType type)
+    {
+        return allStations.Count(s => s.Type == type);
+    }
+
+    private string GetLastValue(StationType type)
+    {
+        var station = allStations.FirstOrDefault(s => s.Type == type);
+        if (station?.LastValue == null) return "—";
+        
+        return type switch
+        {
+            StationType.Temperature => $"{station.LastValue.Value:F1}°C",
+            StationType.Humidity => station.LastValue == -999 ? "Suspended" : $"{station.LastValue.Value:F1}%",
+            StationType.Pressure => $"{station.LastValue.Value:F1} hPa",
+            StationType.Lidar => station.LastFlag ? "Rain" : "Clear",
+            _ => station.LastValue.Value.ToString("F1")
+        };
+    }
+
+    private string GetTypeBadgeClass(StationType type)
+    {
+        return type switch
+        {
+            StationType.Temperature => "bg-danger text-white",
+            StationType.Humidity => "bg-info text-white",
+            StationType.Pressure => "bg-primary text-white",
+            StationType.Lidar => "bg-success text-white",
+            _ => "bg-secondary text-white"
+        };
+    }
+
+    private string GetStationRowClass(Station station, bool isActive)
+    {
+        if (station.Suspended) return "station-suspended";
+        if (!isActive) return "station-inactive";
+        return "station-active";
+    }
+
+    private StationType GetStationType(string stationId)
+    {
+        var station = allStations.FirstOrDefault(s => s.StationId == stationId);
+        return station?.Type ?? StationType.Temperature;
+    }
+
+    private string FormatStationValue(Station station)
+    {
+        if (station.LastValue == null) return "—";
+        
+        return station.Type switch
+        {
+            StationType.Temperature => $"{station.LastValue.Value:F1}°C",
+            StationType.Humidity => station.LastValue == -999 ? "Suspended" : $"{station.LastValue.Value:F1}%",
+            StationType.Pressure => $"{station.LastValue.Value:F1} hPa",
+            StationType.Lidar => station.LastFlag ? $"{station.LastValue.Value:F2} mm/h" : "No rain",
+            _ => station.LastValue.Value.ToString("F2")
+        };
+    }
+
+    private string FormatMeasurementValue(Measurement measurement)
+    {
+        var type = GetStationType(measurement.StationId);
+        return type switch
+        {
+            StationType.Temperature => $"{measurement.Value:F1}°C",
+            StationType.Humidity => measurement.Value == -999 ? "Suspended" : $"{measurement.Value:F1}%",
+            StationType.Pressure => $"{measurement.Value:F1} hPa",
+            StationType.Lidar => measurement.Value > 0 ? $"{measurement.Value:F2} mm/h" : "No rain",
+            _ => measurement.Value.ToString("F2")
+        };
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+}

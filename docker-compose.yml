@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  central-server:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.CentralServer/Dockerfile
+    container_name: meteomesh5-central-server
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+      - "7201:7201"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080;https://+:8443
+      - ConnectionStrings__DefaultConnection=Data Source=central-server.db
+    volumes:
+      - ./data/central-server:/app/data
+    networks:
+      - meteomesh5-network
+    restart: unless-stopped
+
+  local-node:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.LocalNode/Dockerfile
+    container_name: meteomesh5-local-node
+    ports:
+      - "8081:8080"
+      - "8444:8443"
+      - "7200:7200"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080;https://+:8443
+      - ConnectionStrings__DefaultConnection=Data Source=local-node.db
+      - CentralServerUrl=http://central-server:8080
+    volumes:
+      - ./data/local-node:/app/data
+    networks:
+      - meteomesh5-network
+    depends_on:
+      - central-server
+    restart: unless-stopped
+
+  host:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.Host/Dockerfile
+    container_name: meteomesh5-host
+    ports:
+      - "8082:8080"
+      - "8445:8443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080;https://+:8443
+      - LocalNodeUrl=http://local-node:8080
+    networks:
+      - meteomesh5-network
+    depends_on:
+      - local-node
+    restart: unless-stopped
+
+  temperature-station:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.TemperatureStation/Dockerfile
+    container_name: meteomesh5-temperature-station
+    ports:
+      - "8083:8080"
+    environment:
+      - StationId=TEMP-001
+      - StationName=Temperature Station 1
+      - LocalNodeUrl=http://local-node:8080
+      - MeasurementIntervalSeconds=900  # 15 minutes
+    networks:
+      - meteomesh5-network
+    depends_on:
+      - local-node
+    restart: unless-stopped
+
+  humidity-station:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.HumidityStation/Dockerfile
+    container_name: meteomesh5-humidity-station
+    ports:
+      - "8084:8080"
+    environment:
+      - StationId=HUM-001
+      - StationName=Humidity Station 1
+      - LocalNodeUrl=http://local-node:8080
+      - MeasurementIntervalSeconds=900  # 15 minutes
+    networks:
+      - meteomesh5-network
+    depends_on:
+      - local-node
+    restart: unless-stopped
+
+  pressure-station:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.PressureStation/Dockerfile
+    container_name: meteomesh5-pressure-station
+    ports:
+      - "8085:8080"
+    environment:
+      - StationId=PRESS-001
+      - StationName=Pressure Station 1
+      - LocalNodeUrl=http://local-node:8080
+      - MeasurementIntervalSeconds=900  # 15 minutes
+    networks:
+      - meteomesh5-network
+    depends_on:
+      - local-node
+    restart: unless-stopped
+
+  lidar-station:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.LidarStation/Dockerfile
+    container_name: meteomesh5-lidar-station
+    ports:
+      - "8086:8080"
+    environment:
+      - StationId=LIDAR-001
+      - StationName=Lidar Station 1
+      - LocalNodeUrl=http://local-node:8080
+      - MeasurementIntervalSeconds=300  # 5 minutes
+    networks:
+      - meteomesh5-network
+    depends_on:
+      - local-node
+    restart: unless-stopped
+
+networks:
+  meteomesh5-network:
+    driver: bridge
+    name: meteomesh5-network
+
+volumes:
+  central-server-data:
+    driver: local
+  local-node-data:
+    driver: local

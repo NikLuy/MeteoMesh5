@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "MeteoMesh5.LidarStation": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      //"applicationUrl": "https://localhost:62231;http://localhost:62232",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

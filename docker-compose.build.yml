@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  meteomesh5-central:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.CentralServer/Dockerfile
+      platforms:
+        - linux/amd64
+    image: meteomesh5-central:latest
+    
+  meteomesh5-localnode:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.LocalNode/Dockerfile  
+      platforms:
+        - linux/amd64
+    image: meteomesh5-localnode:latest
+    
+  meteomesh5-humidity:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.HumidityStation/Dockerfile
+      platforms:
+        - linux/amd64
+    image: meteomesh5-humidity:latest
+    
+  meteomesh5-lidar:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.LidarStation/Dockerfile
+      platforms:
+        - linux/amd64
+    image: meteomesh5-lidar:latest
+    
+  meteomesh5-pressure:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.PressureStation/Dockerfile
+      platforms:
+        - linux/amd64
+    image: meteomesh5-pressure:latest
+    
+  meteomesh5-temperature:
+    build:
+      context: .
+      dockerfile: MeteoMesh5.TemperatureStation/Dockerfile
+      platforms:
+        - linux/amd64
+    image: meteomesh5-temperature:latest
+
+# Note: MeteoMesh5.Host (Aspire AppHost) is excluded
+# AppHosts are for local development orchestration and should not be containerized
+# To run the AppHost locally: dotnet run --project MeteoMesh5.Host

@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "MeteoMesh5.PressureStation": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      //"applicationUrl": "https://localhost:62242;http://localhost:62243",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

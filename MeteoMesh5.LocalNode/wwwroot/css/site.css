@@ -1,0 +1,240 @@
+/* MeteoMesh5 LocalNode - MeteoMesch Design Theme */
+
+/* ======================================
+   MeteoMesch – Farb- & UI-Token
+   ====================================== */
+:root {
+  /* Primärfarben */
+  --mm-sky: #0E5FD1;          /* Blau – Himmel */
+  --mm-sky-80: #2E76D9;       /* 80% */
+  --mm-sky-60: #5C92E1;       /* 60% */
+  --mm-sky-40: #8CB1EA;       /* 40% */
+  --mm-sky-20: #C5D7F4;       /* 20% */
+
+  --mm-sun: #F6B10A;          /* Gelb – Sonne */
+  --mm-sun-80: #F7C33F;
+  --mm-sun-60: #F9D473;
+  --mm-sun-40: #FBE5A6;
+  --mm-sun-20: #FDF3D2;
+
+  --mm-storm: #2E3A59;        /* Dunkel – Gewitter/Neutral */
+  --mm-cloud: #EFF3FB;        /* Sehr helles Blau als App-Hintergrund */
+
+  --mm-ok: #1E8E3E;           /* Grün – positiv */
+  --mm-warn: #C93C3C;         /* Rot – Warnung */
+  --mm-info: #0AA1F6;         /* Info */
+
+  --mm-text: #0D2038;         /* Primärtext */
+  --mm-border: #E6EAF4;       /* Kanten */
+}
+
+/* Basistypografie */
+body {
+  font-family: "Trebuchet MS", -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji",
+               "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  color: var(--mm-text);
+  background: var(--mm-cloud);
+}
+
+a { 
+  text-decoration: none; 
+}
+
+/* =====================
+   Hero / Intro
+   ===================== */
+.hero {
+  background: linear-gradient(135deg, var(--mm-sky), var(--mm-sun));
+  color: #fff;
+  border-radius: 1rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 .75rem 2rem rgba(14, 95, 209, .18);
+  min-height: 200px;
+}
+
+/* dezente Welle */
+.hero::after {
+  content: "";
+  position: absolute; 
+  inset: auto -10% -20% -10%;
+  height: 45%; 
+  border-radius: 100% 100% 0 0/ 70% 70% 0 0;
+  background: rgba(255, 255, 255, .12);
+  pointer-events: none;
+}
+
+/* =====================
+   Komponenten
+   ===================== */
+.tile { 
+  background: #fff; 
+  border: 1px solid var(--mm-border); 
+  border-radius: .75rem; 
+  padding: 1.5rem;
+  transition: transform .15s ease, box-shadow .15s ease; 
+}
+
+.tile:hover { 
+  transform: translateY(-2px); 
+  box-shadow: 0 .75rem 1.5rem rgba(46, 118, 217, .12); 
+}
+
+.btn-meteo {
+  text-transform: uppercase; 
+  letter-spacing: .02em;
+  border: 2px solid #fff; 
+  color: #fff; 
+  background: transparent; 
+  border-radius: .5rem;
+}
+
+.btn-meteo:hover, 
+.btn-meteo:focus { 
+  background: #fff; 
+  color: var(--mm-sky); 
+  border-color: #fff; 
+}
+
+.btn-outline-sky { 
+  border: 2px solid var(--mm-sky); 
+  color: var(--mm-sky); 
+  text-transform: uppercase; 
+  letter-spacing: .02em; 
+}
+
+.btn-outline-sky:hover { 
+  background: var(--mm-sky); 
+  color: #fff; 
+}
+
+.badge-sky { 
+  background: var(--mm-sky-20); 
+  color: var(--mm-sky); 
+  border: 1px solid var(--mm-sky-40); 
+}
+
+.badge-warn { 
+  background: #FDECEC; 
+  color: var(--mm-warn); 
+  border: 1px solid #F6CACA; 
+}
+
+.badge-info { 
+  background: #EAF6FE; 
+  color: var(--mm-info); 
+  border: 1px solid #CDEBFD; 
+}
+
+.kpi {
+  background: #fff; 
+  border: 1px solid var(--mm-border); 
+  border-radius: .75rem; 
+  padding: 1rem; 
+  height: 100%;
+}
+
+.kpi .label { 
+  color: #6B7A90; 
+  font-size: .9rem; 
+}
+
+.kpi .value { 
+  font-size: 1.75rem; 
+  font-weight: 700; 
+}
+
+/* Station status indicators */
+.station-active {
+  background-color: rgba(30, 142, 62, 0.1);
+  border-left: 4px solid var(--mm-ok);
+}
+
+.station-inactive {
+  background-color: rgba(201, 60, 60, 0.1);
+  border-left: 4px solid var(--mm-warn);
+}
+
+.station-suspended {
+  background-color: rgba(246, 177, 10, 0.1);
+  border-left: 4px solid var(--mm-sun);
+}
+
+/* Table styling */
+.table th {
+  border-top: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--mm-text);
+  background-color: var(--mm-sky-20) !important;
+}
+
+.table-dark th {
+  background-color: var(--mm-storm) !important;
+  color: #fff;
+}
+
+.table-secondary {
+  opacity: 0.7;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.35em 0.65em;
+}
+
+/* Form controls */
+.btn {
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.form-control, .form-select {
+  border-radius: 8px;
+  border: 1px solid var(--mm-border);
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: var(--mm-sky);
+  box-shadow: 0 0 0 0.2rem rgba(14, 95, 209, 0.25);
+}
+
+/* Custom colors */
+.text-primary { color: var(--mm-sky) !important; }
+.text-info { color: var(--mm-info) !important; }
+.text-success { color: var(--mm-ok) !important; }
+.text-warning { color: var(--mm-sun) !important; }
+.text-danger { color: var(--mm-warn) !important; }
+
+.bg-danger { background-color: var(--mm-warn) !important; }
+.bg-info { background-color: var(--mm-info) !important; }
+.bg-primary { background-color: var(--mm-sky) !important; }
+.bg-success { background-color: var(--mm-ok) !important; }
+.bg-warning { background-color: var(--mm-sun) !important; }
+
+/* Hilfsklassen */
+.muted { 
+  color: #6B7A90; 
+}
+
+/* Error UI */
+#blazor-error-ui {
+  background: var(--mm-warn);
+  bottom: 0;
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+  display: none;
+  left: 0;
+  padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+  position: fixed;
+  width: 100%;
+  z-index: 1000;
+  color: white;
+}
+
+#blazor-error-ui .dismiss {
+  cursor: pointer;
+  position: absolute;
+  right: 0.75rem;
+  top: 0.5rem;
+}

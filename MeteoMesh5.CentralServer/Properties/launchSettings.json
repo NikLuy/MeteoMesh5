@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "MeteoMesh5.CentralServer": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      //"applicationUrl": "https://localhost:62223;http://localhost:62224",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

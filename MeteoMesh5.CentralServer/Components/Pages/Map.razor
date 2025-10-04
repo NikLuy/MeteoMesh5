@@ -1,0 +1,427 @@
+@page "/map"
+@using MeteoMesh5.CentralServer.Services
+@using MeteoMesh5.CentralServer.Models
+@inject LocalNodeManager nodeManager
+@inject LocalNodeDataService dataService
+@inject NavigationManager Nav
+@inject TimeProvider timeProvider
+@implements IDisposable
+
+<PageTitle>MeteoMesh5 - Network Map</PageTitle>
+
+<section class="hero container my-4 p-4 p-lg-5">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="display-6 fw-bold mb-2">
+                <i class="bi bi-geo-alt me-2"></i>
+                Network Map
+            </h1>
+            <p class="lead mb-0">Geographic overview of all nodes and weather stations</p>
+        </div>
+        <div class="d-flex gap-3">
+            <a class="btn btn-outline-sky" href="/">
+                <i class="bi bi-house me-1"></i>Home
+            </a>
+            <button class="btn btn-sky" @onclick="RefreshData">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+        </div>
+    </div>
+    <div class="mt-3">
+        <span class="badge badge-sky">@allStations.Count Stations</span>
+        <span class="badge badge-info">@allNodes.Count(n => n.IsOnline) / @allNodes.Count Nodes Online</span>
+        <span class="badge badge-success">@allStations.Count(s => s.IsActive && !s.Suspended) Active Stations</span>
+        <span class="badge badge-warn">@allStations.Count(s => s.Suspended) Suspended</span>
+        <span class="badge badge-info">Last update: @lastUpdate.ToString("HH:mm:ss")</span>
+    </div>
+</section>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Map Container -->
+        <div class="col-lg-8">
+            <div class="tile mb-4">
+                <h5 class="mb-3">
+                    <i class="bi bi-map me-2"></i>
+                    Station Network Overview
+                </h5>
+                
+                <!-- Simulated Map View -->
+                <div class="map-container" style="height: 500px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 12px; position: relative; overflow: hidden; border: 2px solid #e0e0e0;">
+                    
+                    <!-- Map Background Pattern -->
+                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; opacity: 0.1; background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, #000 10px, #000 20px);"></div>
+                    
+                    <!-- Map Title -->
+                    <div class="map-legend" style="position: absolute; top: 15px; left: 15px; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                        <div class="fw-bold">MeteoMesh5 Network</div>
+                        <small class="text-muted">@allStations.Count stations across @allNodes.Count nodes</small>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="map-legend" style="position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                        <div class="small">
+                            <div class="d-flex align-items-center mb-1">
+                                <span class="badge bg-success me-2" style="width: 12px; height: 12px; border-radius: 50%;">&nbsp;</span>
+                                <span>Active Station</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-1">
+                                <span class="badge bg-warning me-2" style="width: 12px; height: 12px; border-radius: 50%;">&nbsp;</span>
+                                <span>Suspended Station</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-1">
+                                <span class="badge bg-danger me-2" style="width: 12px; height: 12px; border-radius: 50%;">&nbsp;</span>
+                                <span>Inactive Station</span>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-primary me-2" style="width: 12px; height: 12px; border-radius: 3px;">&nbsp;</span>
+                                <span>Local Node</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Station Markers -->
+                    @{
+                        var displayStations = allStations.Take(12).ToList();
+                    }
+                    @for (int i = 0; i < displayStations.Count; i++)
+                    {
+                        var station = displayStations[i];
+                        var left = 15 + (i * 8) % 70;
+                        var top = 20 + (i * 12) % 60;
+                        var colorClass = station.Suspended ? "bg-warning" : station.IsActive ? "bg-success" : "bg-danger";
+                        
+                        <div class="station-marker" style="position: absolute; left: @(left)%; top: @(top)%; transform: translate(-50%, -50%); cursor: pointer;"
+                             @onclick="() => SelectStation(station)">
+                            <div class="marker-icon @colorClass" style="width: 16px; height: 16px; border: 2px solid white; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
+                            </div>
+                            <div class="marker-label" style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; white-space: nowrap;">
+                                @GetStationTypeIcon(station.Type) @station.StationId
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Node Markers -->
+                    @{
+                        var displayNodes = allNodes.Where(n => n.IsOnline).Take(6).ToList();
+                    }
+                    @for (int i = 0; i < displayNodes.Count; i++)
+                    {
+                        var node = displayNodes[i];
+                        var left = 20 + (i * 15) % 60;
+                        var top = 25 + (i * 18) % 50;
+                        
+                        <div class="node-marker" style="position: absolute; left: @(left)%; top: @(top)%; transform: translate(-50%, -50%); cursor: pointer;"
+                             @onclick="() => SelectNode(node)">
+                            <div class="marker-icon bg-primary" style="width: 24px; height: 24px; border: 2px solid white; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 11px;">
+                                <i class="bi bi-hdd-network"></i>
+                            </div>
+                            <div class="marker-label" style="position: absolute; top: 28px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; white-space: nowrap;">
+                                @node.NodeId
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Center Information -->
+                    <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); text-align: center;">
+                        <div class="fw-bold">Network Coverage Area</div>
+                        <div class="small text-muted mt-1">
+                            @allNodes.Count(n => n.IsOnline) active nodes managing @allStations.Count(s => s.IsActive) stations
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        This is a simulated map view. In production, this would integrate with Leaflet, Google Maps, or similar mapping services.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Information Sidebar -->
+        <div class="col-lg-4">
+            <!-- Selected Item Details -->
+            @if (selectedStation != null)
+            {
+                <div class="tile mb-4">
+                    <h5 class="mb-3">
+                        <i class="bi bi-broadcast-pin me-2"></i>
+                        Station Details
+                    </h5>
+                    <div class="row g-2 small">
+                        <div class="col-5"><strong>ID:</strong></div>
+                        <div class="col-7"><code>@selectedStation.StationId</code></div>
+                        
+                        <div class="col-5"><strong>Type:</strong></div>
+                        <div class="col-7">
+                            <span class="badge @GetTypeBadgeClass(selectedStation.Type)">@selectedStation.Type</span>
+                        </div>
+                        
+                        <div class="col-5"><strong>Node:</strong></div>
+                        <div class="col-7"><code>@selectedStation.NodeId</code></div>
+                        
+                        <div class="col-5"><strong>Status:</strong></div>
+                        <div class="col-7">
+                            @if (selectedStation.Suspended)
+                            {
+                                <span class="badge bg-warning">Suspended</span>
+                            }
+                            else if (selectedStation.IsActive)
+                            {
+                                <span class="badge bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">Inactive</span>
+                            }
+                        </div>
+                        
+                        <div class="col-5"><strong>Last Update:</strong></div>
+                        <div class="col-7">
+                            @if (selectedStation.LastUpdate != default)
+                            {
+                                @selectedStation.LastUpdate.ToString("yyyy-MM-dd HH:mm")
+                            }
+                            else
+                            {
+                                <span class="text-muted">Never</span>
+                            }
+                        </div>
+                        
+                        <div class="col-5"><strong>Last Value:</strong></div>
+                        <div class="col-7">
+                            @if (selectedStation.LastValue.HasValue)
+                            {
+                                @FormatValue(selectedStation.LastValue.Value, selectedStation.Type)
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </div>
+                        
+                        <div class="col-5"><strong>Quality:</strong></div>
+                        <div class="col-7">
+                            <span class="@(selectedStation.Quality == "Good" ? "text-success" : "text-warning")">@selectedStation.Quality</span>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-outline-sky btn-sm w-100" @onclick="() => selectedStation = null">
+                            <i class="bi bi-x me-1"></i>Clear Selection
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (selectedNode != null)
+            {
+                <div class="tile mb-4">
+                    <h5 class="mb-3">
+                        <i class="bi bi-hdd-network me-2"></i>
+                        Node Details
+                    </h5>
+                    <div class="row g-2 small">
+                        <div class="col-5"><strong>ID:</strong></div>
+                        <div class="col-7"><code>@selectedNode.NodeId</code></div>
+                        
+                        <div class="col-5"><strong>Name:</strong></div>
+                        <div class="col-7">@selectedNode.Name</div>
+                        
+                        <div class="col-5"><strong>Location:</strong></div>
+                        <div class="col-7">@(string.IsNullOrEmpty(selectedNode.Location) ? "Unknown" : selectedNode.Location)</div>
+                        
+                        <div class="col-5"><strong>Status:</strong></div>
+                        <div class="col-7">
+                            @if (selectedNode.IsOnline)
+                            {
+                                <span class="badge bg-success">Online</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">Offline</span>
+                            }
+                        </div>
+                        
+                        <div class="col-5"><strong>Stations:</strong></div>
+                        <div class="col-7">@selectedNode.Stations.Count (@selectedNode.Stations.Count(s => s.IsActive) active)</div>
+                        
+                        <div class="col-5"><strong>Last Seen:</strong></div>
+                        <div class="col-7">@selectedNode.LastSeen.ToString("HH:mm:ss")</div>
+                        
+                        @if (selectedNode.Latitude.HasValue && selectedNode.Longitude.HasValue)
+                        {
+                            <div class="col-5"><strong>Coordinates:</strong></div>
+                            <div class="col-7">
+                                @selectedNode.Latitude.Value.ToString("F4"), @selectedNode.Longitude.Value.ToString("F4")
+                            </div>
+                        }
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-sky btn-sm" @onclick="() => ViewNodeDetails(selectedNode.NodeId)">
+                                <i class="bi bi-eye me-1"></i>View Details
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => selectedNode = null">
+                                <i class="bi bi-x me-1"></i>Clear Selection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Station Summary -->
+            <div class="tile">
+                <h5 class="mb-3">
+                    <i class="bi bi-list me-2"></i>
+                    Station Overview (@allStations.Count)
+                </h5>
+                
+                @if (allStations.Any())
+                {
+                    <div style="max-height: 350px; overflow-y: auto;">
+                        @foreach (var station in allStations.OrderBy(s => s.StationId))
+                        {
+                            <div class="d-flex justify-content-between align-items-center py-2 border-bottom @(selectedStation?.StationId == station.StationId ? "bg-light" : "")"
+                                 style="cursor: pointer;"
+                                 @onclick="() => SelectStation(station)">
+                                <div>
+                                    <div class="small fw-bold">@GetStationTypeIcon(station.Type) @station.StationId</div>
+                                    <small class="text-muted">@station.NodeId • @station.Type</small>
+                                </div>
+                                <div class="text-end">
+                                    @if (station.Suspended)
+                                    {
+                                        <span class="badge bg-warning" style="width: 8px; height: 8px; border-radius: 50%; padding: 0;">&nbsp;</span>
+                                    }
+                                    else if (station.IsActive)
+                                    {
+                                        <span class="badge bg-success" style="width: 8px; height: 8px; border-radius: 50%; padding: 0;">&nbsp;</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger" style="width: 8px; height: 8px; border-radius: 50%; padding: 0;">&nbsp;</span>
+                                    }
+                                    <br>
+                                    <small class="text-muted">@station.Quality</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-broadcast-pin fs-1 d-block mb-2"></i>
+                        <div>No stations registered</div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DateTime lastUpdate;
+    private List<LocalNodeInfo> allNodes = new();
+    private List<StationInfo> allStations = new();
+    private StationInfo? selectedStation;
+    private LocalNodeInfo? selectedNode;
+    private Timer? refreshTimer;
+
+    protected override void OnInitialized()
+    {
+        RefreshData();
+        
+        // Set up auto-refresh every 30 seconds
+        refreshTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(() =>
+            {
+                RefreshData();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    private void RefreshData()
+    {
+        lastUpdate = timeProvider.GetUtcNow().UtcDateTime;
+        
+        // Get all nodes
+        allNodes = nodeManager.GetAllNodes();
+        
+        // Get all stations
+        allStations = nodeManager.GetAllStations();
+        
+        // Clear selection if station/node no longer exists
+        if (selectedStation != null && !allStations.Any(s => s.StationId == selectedStation.StationId))
+        {
+            selectedStation = null;
+        }
+        
+        if (selectedNode != null && !allNodes.Any(n => n.NodeId == selectedNode.NodeId))
+        {
+            selectedNode = null;
+        }
+    }
+
+    private void SelectStation(StationInfo station)
+    {
+        selectedStation = station;
+        selectedNode = null; // Clear node selection
+    }
+
+    private void SelectNode(LocalNodeInfo node)
+    {
+        selectedNode = node;
+        selectedStation = null; // Clear station selection
+    }
+
+    private void ViewNodeDetails(string nodeId)
+    {
+        Nav.NavigateTo($"/node/{Uri.EscapeDataString(nodeId)}");
+    }
+
+    private string GetStationTypeIcon(StationType type)
+    {
+        return type switch
+        {
+            StationType.Temperature => "🌡️",
+            StationType.Humidity => "💧",
+            StationType.Pressure => "📊",
+            StationType.Lidar => "☔",
+            _ => "📡"
+        };
+    }
+
+    private string GetTypeBadgeClass(StationType type)
+    {
+        return type switch
+        {
+            StationType.Temperature => "bg-danger text-white",
+            StationType.Humidity => "bg-info text-white",
+            StationType.Pressure => "bg-primary text-white",
+            StationType.Lidar => "bg-success text-white",
+            _ => "bg-secondary text-white"
+        };
+    }
+
+    private string FormatValue(double value, StationType type)
+    {
+        return type switch
+        {
+            StationType.Temperature => $"{value:F1}°C",
+            StationType.Humidity => value == -999 ? "Suspended" : $"{value:F1}%",
+            StationType.Pressure => $"{value:F1} hPa",
+            StationType.Lidar => value > 0 ? $"{value:F2} mm/h" : "No rain",
+            _ => value.ToString("F2")
+        };
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+}

@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "MeteoMesh5.TemperatureStation": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      //"applicationUrl": "https://localhost:62252;http://localhost:62253",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

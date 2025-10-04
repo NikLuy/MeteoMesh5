@@ -1,0 +1,462 @@
+﻿@page "/messungen"
+@using MeteoMesh5.LocalNode.Models
+@using MeteoMesh5.Shared.Extensions
+@using Microsoft.EntityFrameworkCore
+@inject MeteoMesh5.LocalNode.Data.AppDbContext Db
+@inject TimeProvider TimeProvider
+@implements IDisposable
+
+<PageTitle>MeteoMesh5 LocalNode - Messungen</PageTitle>
+
+<section class="hero container my-4 p-4 p-lg-5">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="display-6 fw-bold mb-2">
+                <i class="bi bi-graph-up me-2"></i>
+                Messungen
+            </h1>
+        </div>
+        
+    </div>
+    <div class="mt-3">
+        <span class="badge badge-sky">@lastUpdate.ToString("HH:mm:ss") Update</span>
+        <span class="badge badge-info">@allEntries.Count Geladen</span>
+        <span class="badge badge-warn">@filteredEntries.Count Gefiltert</span>
+        <span class="badge badge-sky">Auto-Refresh 10s</span>
+    </div>
+</section>
+
+<!-- Filter Controls -->
+<section class="container mb-4">
+    <div class="tile">
+        <h5 class="mb-3">
+            <i class="bi bi-funnel me-2"></i>
+            Filter & Suche
+        </h5>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Station</label>
+                <select class="form-select" @bind="selectedStation" @bind:after="ApplyFilter">
+                    <option value="">Alle Stationen</option>
+                    @foreach (var s in stationIds)
+                    {
+                        <option value="@s">@s</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Sensor Typ</label>
+                <select class="form-select" @bind="selectedStationType" @bind:after="ApplyFilter">
+                    <option value="">Alle Typen</option>
+                    @foreach (var t in stationTypes)
+                    {
+                        <option value="@t">@t</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Qualität</label>
+                <select class="form-select" @bind="selectedQuality" @bind:after="ApplyFilter">
+                    <option value="">Alle</option>
+                    @foreach (var q in qualityValues)
+                    {
+                        <option value="@q">@q</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Anzahl anzeigen</label>
+                <select class="form-select" @bind="entriesPerPage" @bind:after="ApplyFilter">
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="250">250</option>
+                    <option value="0">Alle</option>
+                </select>
+            </div>
+        </div>
+        <div class="row g-3 align-items-end mt-2">
+            <div class="col-md-3">
+                <label class="form-label">Von</label>
+                <input type="datetime-local" class="form-control" value="@dateFromString" @onchange="OnDateFromChanged" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Bis</label>
+                <input type="datetime-local" class="form-control" value="@dateToString" @onchange="OnDateToChanged" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Suche (Station / Qualität)</label>
+                <input class="form-control" @bind="searchText" @bind:after="ApplyFilter" placeholder="Suchtext eingeben..." />
+            </div>
+            <div class="col-md-2 d-flex align-items-end gap-2">
+                <button class="btn btn-outline-sky w-100" @onclick="ExportCsv" disabled="@(!filteredEntries.Any())">
+                    <i class="bi bi-download"></i>
+                </button>
+                <button class="btn btn-outline-secondary w-100" @onclick="ResetFilters">
+                    <i class="bi bi-x-circle"></i>
+                </button>
+            </div>
+        </div>
+        <hr />
+        <div class="row g-3 align-items-end">
+            <div class="col-12"><strong>Sensor Werte Filter (min / max)</strong></div>
+            <div class="col-6 col-md-2">
+                <label class="form-label">Wert</label>
+                <div class="input-group">
+                    <input type="number" step="0.1" class="form-control" placeholder="min" @bind="valueMin" @bind:after="ApplyFilter" />
+                    <input type="number" step="0.1" class="form-control" placeholder="max" @bind="valueMax" @bind:after="ApplyFilter" />
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label">Aux1</label>
+                <div class="input-group">
+                    <input type="number" step="0.1" class="form-control" placeholder="min" @bind="aux1Min" @bind:after="ApplyFilter" />
+                    <input type="number" step="0.1" class="form-control" placeholder="max" @bind="aux1Max" @bind:after="ApplyFilter" />
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label">Aux2</label>
+                <div class="input-group">
+                    <input type="number" step="0.1" class="form-control" placeholder="min" @bind="aux2Min" @bind:after="ApplyFilter" />
+                    <input type="number" step="0.1" class="form-control" placeholder="max" @bind="aux2Max" @bind:after="ApplyFilter" />
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label">Flag Filter</label>
+                <select class="form-select" @bind="flagFilter" @bind:after="ApplyFilter">
+                    <option value="all">Alle</option>
+                    <option value="true">Nur True</option>
+                    <option value="false">Nur False</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Summary Cards -->
+<section class="container mb-4">
+    <div class="row g-3">
+        <div class="col-md-3">
+            <div class="kpi text-center">
+                <div class="label">Gesamt (geladen)</div>
+                <div class="value text-primary">@allEntries.Count</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi text-center">
+                <div class="label">Gefiltert</div>
+                <div class="value text-info">@filteredEntries.Count</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi text-center">
+                <div class="label">Good Quality</div>
+                <div class="value text-success">@filteredEntries.Count(e => e.Quality == "Good")</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi text-center">
+                <div class="label">Andere</div>
+                <div class="value text-warning">@filteredEntries.Count(e => e.Quality != "Good")</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Data Table -->
+<section class="container">
+    <div class="tile p-0">
+        <div class="d-flex justify-content-between align-items-center mb-0 p-3 pb-0">
+            <h3 class="h5 mb-0">
+                <i class="bi bi-table me-2"></i>
+                Sensor Messungen (@displayedEntries.Count / @filteredEntries.Count)
+            </h3>
+        </div>
+        @if (displayedEntries.Any())
+        {
+            <div class="table-responsive">
+                <table class="table align-middle m-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Zeit</th>
+                            <th>Station ID</th>
+                            <th>Sensor Typ</th>
+                            <th>Wert</th>
+                            <th>Aux1</th>
+                            <th>Aux2</th>
+                            <th>Flag</th>
+                            <th>Qualität</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in displayedEntries)
+                        {
+                            <tr class="@GetRowClass(e)">
+                                <td>@e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                <td>
+                                    <i class="bi bi-broadcast-pin me-1"></i>
+                                    <code>@e.StationId</code>
+                                </td>
+                                <td>
+                                    <span class="badge @GetTypeBadgeClass(GetStationType(e.StationId))">@GetStationType(e.StationId)</span>
+                                </td>
+                                <td>@FormatValue(e.Value, GetStationType(e.StationId))</td>
+                                <td>@FormatAux(e.Aux1, GetStationType(e.StationId), "Aux1")</td>
+                                <td>@FormatAux(e.Aux2, GetStationType(e.StationId), "Aux2")</td>
+                                <td>
+                                    @if (GetStationType(e.StationId) == "Lidar")
+                                    {
+                                        if (e.Flag)
+                                        {
+                                            <i class="bi bi-cloud-rain text-primary"></i> <span>Rain</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-sun text-warning"></i> <span>Clear</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        @if (e.Flag)
+                                        {
+                                            <i class="bi bi-check-circle text-success"></i>
+                                        }
+                                        else
+                                        {
+                                            <span class="muted">—</span>
+                                        }
+                                    }
+                                </td>
+                                <td>
+                                    <span class="@(e.Quality == "Good" ? "text-success" : "text-warning fw-bold")">@e.Quality</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-graph-up fs-1 d-block mb-2"></i>
+                <h5 class="mt-3">Keine Daten für die aktuelle Filterauswahl</h5>
+                <p class="muted">Überprüfen Sie die Filter oder warten Sie auf eingehende Sensordaten.</p>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private DateTime lastUpdate = DateTime.Now;
+    private List<Measurement> allEntries = new();
+    private List<Measurement> filteredEntries = new();
+    private List<Measurement> displayedEntries = new();
+
+    private HashSet<string> stationIds = new();
+    private HashSet<string> stationTypes = new();
+    private HashSet<string> qualityValues = new();
+
+    // Filters
+    private string selectedStation = string.Empty;
+    private string selectedStationType = string.Empty;
+    private string selectedQuality = string.Empty;
+    private string flagFilter = "all"; // all, true, false
+    private string searchText = string.Empty;
+    private DateTime? dateFrom;
+    private DateTime? dateTo;
+    private string dateFromString = string.Empty;
+    private string dateToString = string.Empty;
+    private int entriesPerPage = 50;
+
+    // Sensor range filters
+    private double? valueMin, valueMax, aux1Min, aux1Max, aux2Min, aux2Max;
+
+    private System.Threading.Timer? refreshTimer;
+    private const int MaxLoadEntries = 5000; // safety limit
+
+    protected override void OnInitialized()
+    {
+        RefreshData();
+        refreshTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                RefreshData(auto: true);
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    private void RefreshData(bool auto = false)
+    {
+        lastUpdate = TimeProvider.GetUtcNow().UtcDateTime;
+        allEntries = Db.Measurements
+            .OrderByDescending(e => e.Timestamp)
+            .Take(MaxLoadEntries)
+            .AsNoTracking()
+            .ToList();
+
+        stationIds = allEntries.Select(e => e.StationId).Distinct().OrderBy(s => s).ToHashSet();
+        
+        // Get station types from stations table
+        var stations = Db.Stations.AsNoTracking().ToList();
+        stationTypes = stations.Select(s => s.Type.ToString()).Distinct().OrderBy(s => s).ToHashSet();
+        
+        qualityValues = allEntries.Select(e => e.Quality).Distinct().OrderBy(s => s).ToHashSet();
+
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        IEnumerable<Measurement> q = allEntries;
+
+        if (!string.IsNullOrEmpty(selectedStation))
+            q = q.Where(e => e.StationId == selectedStation);
+        
+        if (!string.IsNullOrEmpty(selectedStationType))
+        {
+            var stationsOfType = Db.Stations.Where(s => s.Type.ToString() == selectedStationType).Select(s => s.StationId).ToList();
+            q = q.Where(e => stationsOfType.Contains(e.StationId));
+        }
+        
+        if (!string.IsNullOrEmpty(selectedQuality))
+            q = q.Where(e => e.Quality == selectedQuality);
+
+        if (flagFilter == "true")
+            q = q.Where(e => e.Flag);
+        else if (flagFilter == "false")
+            q = q.Where(e => !e.Flag);
+
+        if (dateFrom.HasValue)
+            q = q.Where(e => e.Timestamp >= dateFrom.Value);
+        if (dateTo.HasValue)
+            q = q.Where(e => e.Timestamp <= dateTo.Value);
+
+        // Numeric ranges
+        if (valueMin.HasValue) q = q.Where(e => e.Value >= valueMin.Value);
+        if (valueMax.HasValue) q = q.Where(e => e.Value <= valueMax.Value);
+        if (aux1Min.HasValue) q = q.Where(e => e.Aux1 >= aux1Min.Value);
+        if (aux1Max.HasValue) q = q.Where(e => e.Aux1 <= aux1Max.Value);
+        if (aux2Min.HasValue) q = q.Where(e => e.Aux2 >= aux2Min.Value);
+        if (aux2Max.HasValue) q = q.Where(e => e.Aux2 <= aux2Max.Value);
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var term = searchText.Trim().ToLowerInvariant();
+            q = q.Where(e => e.StationId.ToLower().Contains(term) || e.Quality.ToLower().Contains(term));
+        }
+
+        filteredEntries = q.OrderByDescending(e => e.Timestamp).ToList();
+        displayedEntries = entriesPerPage == 0 ? filteredEntries : filteredEntries.Take(entriesPerPage).ToList();
+    }
+
+    private void ResetFilters()
+    {
+        selectedStation = string.Empty;
+        selectedStationType = string.Empty;
+        selectedQuality = string.Empty;
+        flagFilter = "all";
+        searchText = string.Empty;
+        dateFrom = null; dateFromString = string.Empty;
+        dateTo = null; dateToString = string.Empty;
+        entriesPerPage = 50;
+        valueMin = valueMax = aux1Min = aux1Max = aux2Min = aux2Max = null;
+        ApplyFilter();
+    }
+
+    private void OnDateFromChanged(ChangeEventArgs e)
+    {
+        dateFromString = e.Value?.ToString() ?? string.Empty;
+        if (DateTime.TryParse(dateFromString, out var dt))
+            dateFrom = dt;
+        else
+            dateFrom = null;
+        ApplyFilter();
+    }
+    
+    private void OnDateToChanged(ChangeEventArgs e)
+    {
+        dateToString = e.Value?.ToString() ?? string.Empty;
+        if (DateTime.TryParse(dateToString, out var dt))
+            dateTo = dt;
+        else
+            dateTo = null;
+        ApplyFilter();
+    }
+
+    private string GetRowClass(Measurement e)
+    {
+        if (e.Quality == "Good") return string.Empty;
+        return "table-warning";
+    }
+
+    private string GetStationType(string stationId)
+    {
+        var station = Db.Stations.FirstOrDefault(s => s.StationId == stationId);
+        return station?.Type.ToString() ?? "Unknown";
+    }
+
+    private string GetTypeBadgeClass(string type)
+    {
+        return type switch
+        {
+            "Temperature" => "bg-danger text-white",
+            "Humidity" => "bg-info text-white",
+            "Pressure" => "bg-primary text-white", 
+            "Lidar" => "bg-success text-white",
+            _ => "bg-secondary text-white"
+        };
+    }
+
+    private string FormatValue(double value, string stationType)
+    {
+        return stationType switch
+        {
+            "Temperature" => $"{value:F1}°C",
+            "Humidity" => value == -999 ? "Suspended" : $"{value:F1}%",
+            "Pressure" => $"{value:F1} hPa",
+            "Lidar" => value > 0 ? $"{value:F2} mm/h" : "No rain",
+            _ => value.ToString("F2")
+        };
+    }
+
+    private string FormatAux(double auxValue, string stationType, string auxType)
+    {
+        if (stationType == "Lidar" && auxType == "Aux1")
+            return $"{auxValue:F1} km"; // visibility
+        return auxValue != 0 ? auxValue.ToString("F2") : "—";
+    }
+
+    private async Task ExportCsv()
+    {
+        var header = "Timestamp,StationId,StationType,Value,Aux1,Aux2,Flag,Quality";
+
+        var lines = filteredEntries.Select(e => string.Join(';', new string[]
+        {
+            e.Timestamp.ToString("o"),
+            e.StationId,
+            GetStationType(e.StationId),
+            e.Value.ToString("F2"),
+            e.Aux1.ToString("F2"),
+            e.Aux2.ToString("F2"),
+            e.Flag ? "1" : "0",
+            e.Quality
+        }));
+
+        // Combine header and data lines
+        var csv = string.Join(Environment.NewLine, new[] { header }.Concat(lines));
+
+        // Convert to byte[] (UTF-8 encoding)
+        var bytes = System.Text.Encoding.UTF8.GetBytes(csv);
+
+        // Call JSRuntime extension
+        await _JsRuntime.SaveAs("measurements_export.csv", bytes);
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+}

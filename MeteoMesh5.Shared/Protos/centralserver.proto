@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+option csharp_namespace = "MeteoMesh5.CentralServer.Grpc";
+
+service CentralServerService {
+    rpc RegisterLocalNode(LocalNodeRegistrationRequest) returns (LocalNodeRegistrationResponse);
+    rpc SendHeartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+    rpc GetNodeData(DataRequest) returns (NodeDataResponse);
+}
+
+message LocalNodeRegistrationRequest {
+    string node_id = 1;
+    string node_name = 2;
+    string version = 3;
+    string node_url = 4;
+    string location = 5;
+    double latitude = 6;
+    double longitude = 7;
+    int64 startup_time = 8;
+    repeated string capabilities = 9;
+}
+
+message LocalNodeRegistrationResponse {
+    bool success = 1;
+    string message = 2;
+    string assigned_node_id = 3;
+    int32 heartbeat_interval_seconds = 4;
+}
+
+message HeartbeatRequest {
+    string node_id = 1;
+    NodeStatus status = 2;
+    repeated StationStatus stations = 3;
+}
+
+message HeartbeatResponse {
+    bool acknowledged = 1;
+    repeated NodeCommand commands = 2;
+    int32 next_heartbeat_seconds = 3;
+}
+
+message NodeStatus {
+    bool is_healthy = 1;
+    double cpu_usage = 2;
+    double memory_usage = 3;
+    int32 active_connections = 4;
+    int64 last_data_received = 5;
+    string status_message = 6;
+    int32 total_measurements = 7;
+}
+
+message StationStatus {
+    string station_id = 1;
+    string station_name = 2;
+    string station_type = 3;
+    bool is_active = 4;
+    int64 last_measurement = 5;
+    int32 measurement_count = 6;
+    double last_value = 7;
+    string quality = 8;
+}
+
+message NodeCommand {
+    string command_id = 1;
+    string command_type = 2;
+    string target_station = 3;
+    map<string, string> parameters = 4;
+}
+
+message DataRequest {
+    string node_id = 1;
+    string station_id = 2;
+    int64 from_timestamp = 3;
+    int64 to_timestamp = 4;
+    int32 max_records = 5;
+}
+
+message NodeDataResponse {
+    bool success = 1;
+    string message = 2;
+    repeated StationData stations = 3;
+    int32 total_records = 4;
+}
+
+message StationData {
+    string station_id = 1;
+    string station_name = 2;
+    string station_type = 3;
+    double latitude = 4;
+    double longitude = 5;
+    repeated MeasurementData measurements = 6;
+}
+
+message MeasurementData {
+    int64 timestamp = 1;
+    double temperature = 2;
+    double humidity = 3;
+    double pressure = 4;
+    double rain_intensity = 5;
+    double visibility = 6;
+    bool rain_flag = 7;
+    string quality = 8;
+}

@@ -1,0 +1,376 @@
+﻿@page "/data"
+@using MeteoMesh5.CentralServer.Services
+@using MeteoMesh5.CentralServer.Models
+@using MeteoMesh5.Shared.Extensions
+@using Microsoft.JSInterop
+@inject LocalNodeManager nodeManager
+@inject LocalNodeDataService dataService
+@inject IJSRuntime JSRuntime
+@inject TimeProvider timeProvider
+@implements IDisposable
+
+<PageTitle>Data Analysis</PageTitle>
+
+<section class="hero container my-4 p-4 p-lg-5">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="display-6 fw-bold mb-2">
+                <i class="bi bi-graph-up me-2"></i>
+                Data Analysis
+            </h1>
+        </div>
+        <div class="d-flex gap-3">
+            <button class="btn btn-outline-sky" @onclick="LoadData" disabled="@isLoading">
+                <i class="bi bi-arrow-clockwise me-1"></i>
+            </button>
+        </div>
+    </div>
+    <div class="mt-3">
+        <span class="badge badge-sky">@nodes.Count(n => n.IsOnline) / @nodes.Count Nodes Online</span>
+        <span class="badge badge-info">@measurements.Count Measurements</span>
+        @if (lastLoadTime.HasValue)
+        {
+            <span class="badge badge-info">Last Load: @lastLoadTime.Value.ToString("HH:mm:ss")</span>
+        }
+    </div>
+</section>
+
+<section class="container mb-4">
+    <div class="tile">
+        <h5 class="mb-3">
+            <i class="bi bi-funnel me-2"></i>
+            Filters & Data Selection
+        </h5>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Node</label>
+                <select class="form-select" @bind="selectedNodeId" @bind:after="OnNodeChanged">
+                    <option value="">All Nodes</option>
+                    @foreach (var n in nodes)
+                    {
+                        <option value="@n.NodeId">@n.NodeId (@n.Name) @(n.IsOnline ? "" : "[OFFLINE]")</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Station</label>
+                <select class="form-select" @bind="selectedStationId" @bind:after="OnStationChanged">
+                    <option value="">All Stations</option>
+                    @foreach (var s in filteredStations)
+                    {
+                        var parentNode = nodes.FirstOrDefault(n => n.NodeId == s.NodeId);
+                        bool effectiveActive = parentNode?.IsOnline == true && s.IsActive && !s.Suspended;
+                        string statusText = s.Suspended ? "[SUSP]" : !s.IsActive ? "[OFF]" : !effectiveActive ? "[NODE OFF]" : "";
+                        <option value="@s.StationId">@s.StationId (@GetStationTypeName(s.Type)) @statusText</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">From</label>
+                <input type="datetime-local" class="form-control" value="@fromString" @onchange="OnFromChanged" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">To</label>
+                <input type="datetime-local" class="form-control" value="@toString" @onchange="OnToChanged" />
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button class="btn btn-outline-sky flex-fill" @onclick="ExportCsv" disabled="@(!measurements.Any())">
+                    <i class="bi bi-download"></i>
+                </button>
+                <button class="btn btn-outline-secondary flex-fill" @onclick="ResetFilters">
+                    <i class="bi bi-x-circle"></i>
+                </button>
+                <button class="btn btn-outline-sky" @onclick="LoadData" disabled="@isLoading">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Node Status Overview -->
+<section class="container mb-4">
+    <div class="row g-3">
+        @foreach (var node in nodes.Take(4))
+        {
+            <div class="col-md-3">
+                <div class="tile p-3 h-100">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-uppercase small muted">Node</div>
+                            <div class="fs-6 fw-semibold">@node.NodeId</div>
+                            <div class="@(node.IsOnline ? "text-success" : "text-danger") fw-bold">
+                                @(node.IsOnline ? "ONLINE" : "OFFLINE")
+                            </div>
+                        </div>
+                        <i class="bi @(node.IsOnline ? "bi-check-circle" : "bi-x-circle") fs-2 @(node.IsOnline ? "text-success" : "text-danger")"></i>
+                    </div>
+                    <div class="mt-2">
+                        <small class="muted">@node.Stations.Count stations • @node.Location</small>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+<section class="container">
+    <div class="tile p-0">
+        <div class="d-flex justify-content-between align-items-center mb-0 p-3 pb-0">
+            <h3 class="h5 mb-0">
+                <i class="bi bi-table me-2"></i>
+                Measurements (@measurements.Count)
+            </h3>
+        </div>
+        @if (!string.IsNullOrEmpty(warningMessage))
+        {
+            <div class="alert alert-warning m-3">@warningMessage</div>
+        }
+        @if (measurements.Any())
+        {
+            <div class="table-responsive">
+                <table class="table align-middle m-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Timestamp (UTC)</th>
+                            <th>Node</th>
+                            <th>Station</th>
+                            <th>Temp</th>
+                            <th>Hum</th>
+                            <th>Pressure</th>
+                            <th>Rain (mm/h)</th>
+                            <th>Quality</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in measurements.Take(100))
+                        {
+                            var nodeInfo = nodes.FirstOrDefault(n => n.NodeId == m.NodeId);
+                            <tr class="@(nodeInfo?.IsOnline == true ? string.Empty : "table-secondary")">
+                                <td>@m.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                <td>
+                                    <code>@m.NodeId</code>
+                                    @if (nodeInfo?.IsOnline != true)
+                                    {
+                                        <small class="text-danger">(offline)</small>
+                                    }
+                                </td>
+                                <td><code>@m.StationId</code></td>
+                                <td>@(m.Temperature != 0 ? m.Temperature.ToString("F1") + "°C" : "—")</td>
+                                <td>@(m.Humidity == -999 ? "Susp" : m.Humidity != 0 ? m.Humidity.ToString("F1") + "%" : "—")</td>
+                                <td>@(m.AirPressure != 0 ? m.AirPressure.ToString("F1") + " hPa" : "—")</td>
+                                <td>@(m.PrecipitationIntensity > 0 ? m.PrecipitationIntensity.ToString("F2") : "—")</td>
+                                <td>
+                                    <span class="@(m.QualityStatus == "Good" ? "text-success" : "text-warning")">@m.QualityStatus</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (!isLoading)
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-graph-up fs-1 d-block mb-2"></i>
+                <h5 class="mt-3">No Data Available</h5>
+                <p class="text-muted mb-0">Select filters and click "Load Data" to fetch measurements from connected nodes.</p>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="text-muted mt-3">Loading data from nodes...</p>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private List<LocalNodeInfo> nodes = new();
+    private List<StationInfo> filteredStations = new();
+    private List<MeasurementInfo> measurements = new();
+
+    private string selectedNodeId = string.Empty;
+    private string selectedStationId = string.Empty;
+    private string fromString = string.Empty;
+    private string toString = string.Empty;
+    private bool isLoading = false;
+    private string warningMessage = string.Empty;
+    private DateTime? lastLoadTime;
+    private Timer? refreshTimer;
+
+    protected override void OnInitialized()
+    {
+        RefreshNodes();
+        // Periodic refresh to update offline/online status (every 60s)
+        refreshTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(() =>
+            {
+                RefreshNodes();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+    }
+
+    private void RefreshNodes()
+    {
+        nodes = nodeManager.GetAllNodes().OrderBy(n => n.NodeId).ToList();
+        UpdateStations();
+    }
+
+    private void OnNodeChanged() => UpdateStations();
+
+    private void OnStationChanged()
+    {
+        if (string.IsNullOrEmpty(selectedNodeId) && !string.IsNullOrEmpty(selectedStationId))
+        {
+            var ownerNode = nodes.FirstOrDefault(n => n.Stations.Any(s => s.StationId == selectedStationId));
+            if (ownerNode != null)
+            {
+                selectedNodeId = ownerNode.NodeId; // auto narrow to the owning node
+                UpdateStations();
+            }
+        }
+    }
+
+    private void OnFromChanged(ChangeEventArgs e) => fromString = e.Value?.ToString() ?? string.Empty;
+    private void OnToChanged(ChangeEventArgs e) => toString = e.Value?.ToString() ?? string.Empty;
+
+    private void UpdateStations()
+    {
+        var sourceNodes = string.IsNullOrEmpty(selectedNodeId) ? nodes : nodes.Where(n => n.NodeId == selectedNodeId);
+        filteredStations = sourceNodes.SelectMany(n => n.Stations).OrderBy(s => s.StationId).ToList();
+        if (!filteredStations.Any(s => s.StationId == selectedStationId)) selectedStationId = string.Empty;
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        warningMessage = string.Empty;
+        measurements.Clear();
+        StateHasChanged();
+
+        DateTime? from = DateTime.TryParse(fromString, out var f) ? DateTime.SpecifyKind(f, DateTimeKind.Utc) : null;
+        DateTime? to = DateTime.TryParse(toString, out var t) ? DateTime.SpecifyKind(t, DateTimeKind.Utc) : null;
+
+        try
+        {
+            if (string.IsNullOrEmpty(selectedNodeId))
+            {
+                var all = await dataService.FetchDataFromAllNodesAsync(from, to, string.IsNullOrEmpty(selectedStationId) ? 500 : 1000);
+                if (!string.IsNullOrEmpty(selectedStationId))
+                {
+                    all = all.Where(m => m.StationId == selectedStationId).ToList();
+                }
+                measurements = all;
+                
+                if (!measurements.Any())
+                {
+                    var onlineNodes = nodes.Count(n => n.IsOnline);
+                    var totalNodes = nodes.Count;
+                    if (totalNodes == 0)
+                    {
+                        warningMessage = "No nodes are registered with the CentralServer.";
+                    }
+                    else if (onlineNodes == 0)
+                    {
+                        warningMessage = $"All {totalNodes} registered nodes are currently offline.";
+                    }
+                    else
+                    {
+                        warningMessage = $"No measurements found from {onlineNodes} online nodes. Check if stations are generating data.";
+                    }
+                }
+            }
+            else
+            {
+                var node = nodes.FirstOrDefault(n => n.NodeId == selectedNodeId);
+                if (node != null && string.IsNullOrWhiteSpace(node.NodeUrl))
+                {
+                    warningMessage = $"Selected node {node.NodeId} does not have a configured URL for querying.";
+                }
+                else if (node != null && !node.IsOnline)
+                {
+                    warningMessage = $"Selected node {node.NodeId} is currently offline.";
+                }
+                else
+                {
+                    measurements = await dataService.FetchDataFromNodeAsync(selectedNodeId, string.IsNullOrEmpty(selectedStationId) ? null : selectedStationId, from, to, 500);
+                    
+                    if (!measurements.Any())
+                    {
+                        warningMessage = $"No measurements found from node {selectedNodeId}. Check if the node has data for the selected time range.";
+                    }
+                }
+            }
+
+            lastLoadTime = timeProvider.GetUtcNow().UtcDateTime;
+        }
+        catch (Exception ex)
+        {
+            warningMessage = $"Error loading data: {ex.Message}";
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void ResetFilters()
+    {
+        selectedNodeId = string.Empty;
+        selectedStationId = string.Empty;
+        fromString = string.Empty;
+        toString = string.Empty;
+        measurements.Clear();
+        warningMessage = string.Empty;
+        UpdateStations();
+    }
+
+    private async Task ExportCsv()
+    {
+        try
+        {
+            var header = "Timestamp,NodeId,StationId,Temperature,Humidity,AirPressure,PrecipitationIntensity,Quality";
+            var lines = measurements.Select(m => string.Join(';', new string[] {
+                m.Timestamp.ToString("o"),
+                m.NodeId,
+                m.StationId,
+                m.Temperature.ToString("F2"),
+                m.Humidity.ToString("F2"),
+                m.AirPressure.ToString("F2"),
+                m.PrecipitationIntensity.ToString("F2"),
+                m.QualityStatus
+            }));
+
+            var csvContent = string.Join(Environment.NewLine, new[] { header }.Concat(lines));
+            var bytes = System.Text.Encoding.UTF8.GetBytes(csvContent);
+            var fileName = $"central_measurements_export_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+
+            await JSRuntime.SaveAs(fileName, bytes);
+        }
+        catch (Exception ex)
+        {
+            warningMessage = $"CSV Export failed: {ex.Message}";
+        }
+    }
+
+    private string GetStationTypeName(StationType type)
+    {
+        return type switch
+        {
+            StationType.Temperature => "Temp",
+            StationType.Humidity => "Hum",
+            StationType.Pressure => "Press",
+            StationType.Lidar => "Lidar",
+            _ => "Unknown"
+        };
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+}

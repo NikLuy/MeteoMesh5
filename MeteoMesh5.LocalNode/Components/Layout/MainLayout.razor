@@ -1,0 +1,47 @@
+﻿@inherits LayoutComponentBase
+
+@* <div class="meteomesh-container"> *@
+<header>
+    <NavMenu />
+</header>
+<partial name="_Notifications" />
+@* <div class="meteomesh-container"> *@
+
+    <div class="container my-4">
+        <main role="main" class="pb-4">
+            <article class="content">
+                @Body
+            </article>
+        </main>
+    </div>
+
+
+    <!-- FOOTER -->
+    <footer class="container footer-meteo my-5 p-4">
+        <div class="row g-4">
+            <div class="col-6 col-md-4">
+                <h6 class="text-uppercase">MeteoMesch</h6>
+                <div class="small">Regionale Messdaten & Vorhersagen.</div>
+            </div>
+            <div class="col-6 col-md-4">
+                <h6 class="text-uppercase">Links</h6>
+                <ul class="list-unstyled small m-0">
+                    <li><a href="#">API</a></li>
+                    <li><a href="#">Dokumentation</a></li>
+                    <li><a href="#">Status</a></li>
+                </ul>
+            </div>
+            <div class="col-12 col-md-4">
+                <h6 class="text-uppercase">Kontakt</h6>
+                <div class="small">Schwyz · Schweiz</div>
+            </div>
+        </div>
+        <hr class="border-light opacity-50 my-3">
+        <div class="d-flex justify-content-between small flex-wrap gap-2">
+            <div class="d-flex justify-content-between small">
+                <span>© @DateTime.Now.Year – ebs Energie AG</span>
+                <a href="https://www.ebs.swiss/" target="_blank" rel="noopener">ebs.swiss</a>
+            </div>
+        </div>
+    </footer>
+@* </div>  *@

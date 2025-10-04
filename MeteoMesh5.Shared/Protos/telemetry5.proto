@@ -1,0 +1,39 @@
+syntax = "proto3";
+option csharp_namespace = "MeteoMesh5.Grpc";
+package meteomesh5;
+
+// Generic measurement envelope for single-parameter stations
+message SensorMeasurement {
+  string station_id = 1;
+  string station_type = 2; // Temperature, Humidity, Pressure, Lidar
+  int64 timestamp_unix = 3;
+  double value = 4;               // primary reading
+  double aux1 = 5;                // optional (e.g. wind dir for wind speed sensor)
+  double aux2 = 6;                // optional
+  bool flag = 7;                  // e.g. raining for lidar, suspended, etc.
+  string quality = 8;             // Good/Warning/Error
+}
+
+message SubmitMeasurementRequest { SensorMeasurement measurement = 1; }
+message SubmitMeasurementResponse { bool success = 1; string message = 2; }
+
+// Command from node to station
+message ControlCommand {
+  string command_id = 1;
+  string target_station_id = 2; // empty means broadcast to type
+  string target_type = 3;       // Temperature/Humidity/etc if broadcast
+  string action = 4;            // Suspend, Resume, SetInterval
+  double numeric_value = 5;     // interval minutes etc.
+  int64 issued_unix = 6;
+}
+
+message CommandStreamRequest { string station_id = 1; string station_type = 2; }
+
+service StationIngressService {
+  rpc SubmitMeasurement(SubmitMeasurementRequest) returns (SubmitMeasurementResponse);
+}
+
+service StationControlService {
+  // Server stream commands to a station
+  rpc StreamCommands(CommandStreamRequest) returns (stream ControlCommand);
+}

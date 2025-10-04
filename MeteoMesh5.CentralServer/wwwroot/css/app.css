@@ -1,0 +1,436 @@
+/* MeteoMesch Global Styles */
+
+/* MeteoMesch Color Variables */
+:root {
+    --mm-sky: #0E5FD1;
+    --mm-sky-80: #2E76D9;
+    --mm-sky-60: #5C92E1;
+    --mm-sky-40: #8CB1EA;
+    --mm-sky-20: #C5D7F4;
+    --mm-sun: #F6B10A;
+    --mm-sun-80: #F7C33F;
+    --mm-sun-60: #F9D473;
+    --mm-sun-40: #FBE5A6;
+    --mm-sun-20: #FDF3D2;
+    --mm-storm: #2E3A59;
+    --mm-cloud: #EFF3FB;
+    --mm-ok: #1E8E3E;
+    --mm-warn: #C93C3C;
+    --mm-info: #0AA1F6;
+    --mm-text: #0D2038;
+    --mm-border: #E6EAF4;
+}
+
+/* Global Body Styling */
+body {
+    font-family: "Trebuchet MS", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--mm-text);
+    background: var(--mm-cloud);
+    margin: 0;
+    padding: 0;
+}
+
+/* MeteoMesh Container */
+.meteomesh-container {
+    min-height: 100vh;
+}
+
+/* Hero Section */
+.hero {
+    background: linear-gradient(135deg, var(--mm-sky), var(--mm-sun));
+    color: #fff;
+    border-radius: 1rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0.75rem 2rem rgba(14, 95, 209, 0.18);
+    padding: 2rem;
+    margin: 1rem 0;
+}
+
+    .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -10% -20% -10%;
+        height: 45%;
+        border-radius: 100% 100% 0 0 / 70% 70% 0 0;
+        background: rgba(255, 255, 255, 0.12);
+        pointer-events: none;
+    }
+
+/* Tiles */
+.tile {
+    background: #fff;
+    border: 1px solid var(--mm-border);
+    border-radius: 0.75rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+    .tile:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.75rem 1.5rem rgba(46, 118, 217, 0.12);
+    }
+
+/* Buttons */
+.btn-meteo {
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    border: 2px solid #fff;
+    color: #fff;
+    background: transparent;
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    text-decoration: none;
+    display: inline-block;
+    margin-right: 0.5rem;
+    cursor: pointer;
+}
+
+    .btn-meteo:hover {
+        background: #fff;
+        color: var(--mm-sky);
+        border-color: #fff;
+        text-decoration: none;
+    }
+
+.btn-outline-sky {
+    border: 2px solid var(--mm-sky);
+    color: var(--mm-sky);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    background: transparent;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
+}
+
+    .btn-outline-sky:hover {
+        background: var(--mm-sky);
+        color: #fff;
+        text-decoration: none;
+    }
+
+/* Badges */
+.badge-sky {
+    background: var(--mm-sky-20);
+    color: var(--mm-sky);
+    border: 1px solid var(--mm-sky-40);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    margin-right: 0.25rem;
+}
+
+.badge-info {
+    background: #EAF6FE;
+    color: var(--mm-info);
+    border: 1px solid #CDEBFD;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    margin-right: 0.25rem;
+}
+
+.badge-warn {
+    background: #FDECEC;
+    color: var(--mm-warn);
+    border: 1px solid #F6CACA;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    margin-right: 0.25rem;
+}
+
+/* KPI Cards */
+.kpi {
+    background: #fff;
+    border: 1px solid var(--mm-border);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    height: 100%;
+    text-align: center;
+}
+
+    .kpi .label {
+        color: #6B7A90;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .kpi .value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+/* Grids */
+.weather-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+}
+
+.forecast-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+}
+
+/* Utility Classes */
+.muted {
+    color: #6B7A90;
+    font-size: 0.8rem;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+.d-flex {
+    display: flex;
+}
+
+.justify-content-between {
+    justify-content: space-between;
+}
+
+.align-items-center {
+    align-items: center;
+}
+
+.gap-2 {
+    gap: 0.5rem;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* Forecast Items */
+.forecast-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-top: 1px dashed var(--mm-border);
+}
+
+    .forecast-item:first-child {
+        border-top: none;
+    }
+
+/* Navigation */
+.navbar-meteo {
+    background: linear-gradient(135deg, var(--mm-sky), var(--mm-sun));
+    margin-bottom: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+}
+
+    .navbar-meteo .container {
+        display: flex;
+        align-items: center;
+    }
+
+    .navbar-meteo .navbar-brand {
+        color: rgba(255, 255, 255, .95);
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        margin-right: auto;
+    }
+
+    .navbar-meteo .navbar-collapse {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .navbar-meteo .navbar-nav {
+        display: flex;
+        align-items: center;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .navbar-meteo .nav-item {
+        display: flex;
+        align-items: center;
+        margin: 0;
+    }
+
+    .navbar-meteo .nav-link {
+        color: rgba(255, 255, 255, .95);
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        display: flex;
+        align-items: center;
+        height: auto;
+        line-height: 1.5;
+        white-space: nowrap;
+    }
+
+        .navbar-meteo .nav-link:hover,
+        .navbar-meteo .nav-link.active {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 0.25rem;
+        }
+
+    .navbar-meteo .navbar-text {
+        color: rgba(255, 255, 255, .95);
+        display: flex;
+        align-items: center;
+        margin: 0;
+    }
+
+    .navbar-meteo .navbar-toggler {
+        border-color: rgba(255, 255, 255, .4);
+    }
+
+    .navbar-meteo .navbar-toggler-icon {
+        filter: invert(1) grayscale(1);
+    }
+
+    /* Ensure all navbar elements are aligned */
+    .navbar-meteo .navbar-nav .nav-item,
+    .navbar-meteo .navbar-nav .nav-link,
+    .navbar-meteo .navbar-brand,
+    .navbar-meteo .navbar-text {
+        line-height: 1.5;
+        height: auto;
+    }
+
+/* Bootstrap Overrides */
+.btn-primary {
+    background-color: var(--mm-sky);
+    border-color: var(--mm-sky);
+}
+
+    .btn-primary:hover {
+        background-color: var(--mm-sky-80);
+        border-color: var(--mm-sky-80);
+    }
+
+.btn-outline-primary {
+    color: var(--mm-sky);
+    border-color: var(--mm-sky);
+}
+
+    .btn-outline-primary:hover {
+        background-color: var(--mm-sky);
+        border-color: var(--mm-sky);
+    }
+
+/* Additional navbar alignment fixes */
+.navbar-meteo .navbar-nav .nav-item {
+    height: auto;
+}
+
+.navbar-meteo .navbar-nav .nav-link {
+    vertical-align: middle;
+}
+
+/* Ensure Bootstrap's default margins don't interfere */
+.navbar-meteo .navbar-nav .nav-item:not(:last-child) {
+    margin-right: 0;
+}
+
+.navbar-meteo .navbar-nav {
+    flex-direction: row;
+}
+
+/* Fix for responsive behavior */
+@media (max-width: 991.98px) {
+    .navbar-meteo .navbar-nav {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .navbar-meteo .nav-item {
+        width: 100%;
+    }
+}
+
+/* Loading Animation */
+.loading {
+    display: inline-block;
+    width: 2rem;
+    height: 2rem;
+    border: 0.25rem solid var(--mm-border);
+    border-radius: 50%;
+    border-top-color: var(--mm-sky);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Error UI */
+#blazor-error-ui {
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .weather-grid {
+        grid-template-columns: 1fr;
+        margin: 1rem 0;
+    }
+
+    .forecast-grid {
+        grid-template-columns: 1fr;
+        margin: 1rem 0;
+    }
+
+    .hero {
+        padding: 1rem;
+    }
+
+    .container {
+        padding: 0 0.5rem;
+    }
+}
+
+/* Footer */
+.footer-meteo {
+    background: var(--mm-storm);
+    color: #fff;
+    border-radius: 1rem;
+}
+
+    .footer-meteo a {
+        color: #fff;
+        text-decoration: none;
+    }
+
+        .footer-meteo a:hover {
+            text-decoration: underline;
+        }
+
