@@ -37,6 +37,7 @@ public class StationWorker : BackgroundService
     private readonly IOptions<SimulationOptions> _sim; 
     private readonly IConfiguration _cfg; 
     private readonly TimeProvider _timeProvider;
+    private readonly TimeAlignmentService _timeAlignment;
     private GrpcChannel? _channel; 
     private StationIngressService.StationIngressServiceClient? _client; 
     private TimeSpan _interval = TimeSpan.FromMinutes(15);
@@ -44,12 +45,14 @@ public class StationWorker : BackgroundService
     private readonly string _stationType; 
     private readonly string _nodeUrl;
     
-    public StationWorker(ILogger<StationWorker> logger, IOptions<SimulationOptions> sim, IConfiguration cfg, TimeProvider timeProvider)
+    public StationWorker(ILogger<StationWorker> logger, IOptions<SimulationOptions> sim, IConfiguration cfg, 
+        TimeProvider timeProvider, TimeAlignmentService timeAlignment)
     { 
         _logger = logger; 
         _sim = sim; 
         _cfg = cfg; 
         _timeProvider = timeProvider;
+        _timeAlignment = timeAlignment;
         _stationId = _cfg["Station:Id"] ?? "LIDAR_SIM"; 
         _stationType = "Lidar"; 
         _nodeUrl = _cfg["Station:NodeUrl"] ?? "https://localhost:7101"; 
@@ -79,24 +82,25 @@ public class StationWorker : BackgroundService
             
             _logger.LogInformation("gRPC channel established to {NodeUrl}", _nodeUrl);
             
-            var lastMeasurementTime = _timeProvider.GetUtcNow();
+            var currentTime = _timeProvider.GetUtcNow();
+            var nextMeasurementTime = _timeAlignment.GetNextAlignedMeasurementTime(currentTime, _interval);
             
-            _logger.LogInformation("Beginning measurement loop - Initial interval: {IntervalMinutes} minutes, Rain threshold: >0 mm/h, Start time: {StartTime}", 
-                _interval.TotalMinutes, lastMeasurementTime.ToString("HH:mm:ss"));
+            _logger.LogInformation("Beginning measurement loop - Interval: {IntervalMinutes} minutes, Rain threshold: >0 mm/h, Next measurement: {NextTime}", 
+                _interval.TotalMinutes, nextMeasurementTime.ToString("HH:mm:ss"));
             
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var currentTime = _timeProvider.GetUtcNow();
+                    currentTime = _timeProvider.GetUtcNow();
                     
-                    // Check if it's time for the next measurement
-                    if (currentTime >= lastMeasurementTime.Add(_interval))
+                    // Check if we've reached the next aligned measurement time
+                    if (currentTime >= nextMeasurementTime)
                     {
                         measurementCount++;
                         
-                        // Generate rain detection (analog value >0 = rain for this project)
-                        var minutesSinceStart = (currentTime - _sim.Value.StartTime).TotalMinutes;
+                        // Generate rain detection (analog value >0 = rain for this project) using aligned time
+                        var minutesSinceStart = _timeAlignment.GetElapsedMinutes(_sim.Value.StartTime);
                         var rainChance = 0.2 + 0.3 * Math.Sin(minutesSinceStart / 240.0 * Math.PI * 2); // varying rain probability
                         var isRaining = Random.Shared.NextDouble() < rainChance;
                         var rainIntensity = isRaining ? Random.Shared.NextDouble() * 10 + 0.5 : 0; // 0.5-10.5 mm/h when raining
@@ -114,7 +118,7 @@ public class StationWorker : BackgroundService
                             {
                                 StationId = _stationId,
                                 StationType = _stationType,
-                                TimestampUnix = currentTime.ToUnixTimeSeconds(),
+                                TimestampUnix = nextMeasurementTime.ToUnixTimeSeconds(), // Use aligned time, not current time
                                 Value = rainIntensity, // analog rain value (>0 = rain)
                                 Aux1 = visibility, // visibility in km
                                 Flag = isRaining, // boolean rain flag
@@ -135,17 +139,18 @@ public class StationWorker : BackgroundService
                         {
                             if (isRaining)
                             {
-                                _logger.LogWarning("Measurement #{Count} RAIN DETECTED: Intensity={Rain:F2} mm/h, Visibility={Vis:F1}km at {SimTime} (gRPC: {ElapsedMs}ms) - Will trigger humidity suspension!", 
-                                    measurementCount, rainIntensity, visibility, currentTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds);
+                                _logger.LogWarning("Measurement #{Count} RAIN DETECTED: Intensity={Rain:F2} mm/h, Visibility={Vis:F1}km at aligned time {AlignedTime} (gRPC: {ElapsedMs}ms) - Will trigger humidity suspension!", 
+                                    measurementCount, rainIntensity, visibility, nextMeasurementTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds);
                             }
                             else
                             {
-                                _logger.LogInformation("Measurement #{Count} submitted successfully: No rain, Visibility={Vis:F1}km at {SimTime} (gRPC: {ElapsedMs}ms)", 
-                                    measurementCount, visibility, currentTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds);
+                                _logger.LogInformation("Measurement #{Count} submitted successfully: No rain, Visibility={Vis:F1}km at aligned time {AlignedTime} (gRPC: {ElapsedMs}ms)", 
+                                    measurementCount, visibility, nextMeasurementTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds);
                             }
                         }
                         
-                        lastMeasurementTime = currentTime;
+                        // Calculate next aligned measurement time
+                        nextMeasurementTime = _timeAlignment.GetNextAlignedMeasurementTime(nextMeasurementTime, _interval);
                     }
                 }
                 catch (Exception ex)

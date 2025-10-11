@@ -8,7 +8,7 @@ namespace MeteoMesh5.Shared.Extensions;
 public static class TimeProviderServiceExtensions
 {
     /// <summary>
-    /// Registers TimeProvider based on simulation configuration
+    /// Registers TimeProvider based on simulation configuration and TimeAlignmentService
     /// </summary>
     public static IServiceCollection AddTimeProvider(this IServiceCollection services)
     {
@@ -26,6 +26,9 @@ public static class TimeProviderServiceExtensions
             return SystemTimeProvider.Instance;
         });
 
+        // Register TimeAlignmentService that depends on TimeProvider
+        services.AddSingleton<TimeAlignmentService>();
+
         return services;
     }
 
@@ -34,7 +37,9 @@ public static class TimeProviderServiceExtensions
     /// </summary>
     public static IServiceCollection AddSystemTimeProvider(this IServiceCollection services)
     {
-        return services.AddSingleton<TimeProvider>(SystemTimeProvider.Instance);
+        services.AddSingleton<TimeProvider>(SystemTimeProvider.Instance);
+        services.AddSingleton<TimeAlignmentService>();
+        return services;
     }
 
     /// <summary>
@@ -57,6 +62,8 @@ public static class TimeProviderServiceExtensions
             var options = serviceProvider.GetRequiredService<IOptions<SimulationOptions>>();
             return new SimulationTimeProvider(options, timeZone);
         });
+
+        services.AddSingleton<TimeAlignmentService>();
 
         return services;
     }

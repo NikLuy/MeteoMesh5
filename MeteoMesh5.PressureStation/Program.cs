@@ -38,6 +38,7 @@ public class StationWorker : BackgroundService
     private readonly IOptions<SimulationOptions> _sim; 
     private readonly IConfiguration _cfg; 
     private readonly TimeProvider _timeProvider;
+    private readonly TimeAlignmentService _timeAlignment;
     private GrpcChannel? _channel; 
     private StationIngressService.StationIngressServiceClient? _client; 
     private TimeSpan _interval = TimeSpan.FromMinutes(15);
@@ -45,12 +46,20 @@ public class StationWorker : BackgroundService
     private readonly string _stationType; 
     private readonly string _nodeUrl;
     
-    public StationWorker(ILogger<StationWorker> logger, IOptions<SimulationOptions> sim, IConfiguration cfg, TimeProvider timeProvider)
+    // Pressure system state tracking for realistic behavior
+    private bool _isInHighPressureSystem = false;
+    private DateTimeOffset _highPressureSystemStart;
+    private double _highPressureBaseline = 960; // Base pressure during high pressure system
+    private TimeSpan _highPressureSystemDuration = TimeSpan.FromHours(2); // Typical duration
+    
+    public StationWorker(ILogger<StationWorker> logger, IOptions<SimulationOptions> sim, IConfiguration cfg, 
+        TimeProvider timeProvider, TimeAlignmentService timeAlignment)
     { 
         _logger = logger; 
         _sim = sim; 
         _cfg = cfg; 
         _timeProvider = timeProvider;
+        _timeAlignment = timeAlignment;
         _stationId = _cfg["Station:Id"] ?? "PRES_SIM"; 
         _stationType = "Pressure"; 
         _nodeUrl = _cfg["Station:NodeUrl"] ?? "https://localhost:7101"; 
@@ -79,27 +88,74 @@ public class StationWorker : BackgroundService
             
             _logger.LogInformation("gRPC channel established to {NodeUrl}", _nodeUrl);
             
-            var lastMeasurementTime = _timeProvider.GetUtcNow();
+            var currentTime = _timeProvider.GetUtcNow();
+            var nextMeasurementTime = _timeAlignment.GetNextAlignedMeasurementTime(currentTime, _interval);
             
-            _logger.LogInformation("Beginning measurement loop - Initial interval: {IntervalMinutes} minutes, High pressure threshold: >950 hPa, Start time: {StartTime}", 
-                _interval.TotalMinutes, lastMeasurementTime.ToString("HH:mm:ss"));
+            _logger.LogInformation("Beginning measurement loop - Interval: {IntervalMinutes} minutes, High pressure threshold: >950 hPa, Next measurement: {NextTime}", 
+                _interval.TotalMinutes, nextMeasurementTime.ToString("HH:mm:ss"));
             
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var currentTime = _timeProvider.GetUtcNow();
+                    currentTime = _timeProvider.GetUtcNow();
                     
-                    // Check if it's time for the next measurement
-                    if (currentTime >= lastMeasurementTime.Add(_interval))
+                    // Check if we've reached the next aligned measurement time
+                    if (currentTime >= nextMeasurementTime)
                     {
                         measurementCount++;
                         
-                        // Generate pressure value 980-1040 hPa with occasional spikes >950
-                        var minutesSinceStart = (currentTime - _sim.Value.StartTime).TotalMinutes;
-                        var basePressure = 1010 + 20 * Math.Sin(minutesSinceStart / 180.0 * Math.PI * 2);
-                        var spike = Random.Shared.NextDouble() < 0.3 ? Random.Shared.NextDouble() * 15 : 0; // 30% chance of spike
-                        var pressure = basePressure + spike + Random.Shared.NextDouble() * 2;
+                        // Generate realistic pressure with persistent high-pressure systems
+                        var minutesSinceStart = _timeAlignment.GetElapsedMinutes(_sim.Value.StartTime);
+                        
+                        // Check if we should transition pressure systems
+                        if (!_isInHighPressureSystem)
+                        {
+                            // Normal pressure - check for high pressure system start (5% chance per measurement)
+                            if (Random.Shared.NextDouble() < 0.05)
+                            {
+                                _isInHighPressureSystem = true;
+                                _highPressureSystemStart = currentTime;
+                                _highPressureBaseline = 955 + Random.Shared.NextDouble() * 20; // 955-975 hPa
+                                _highPressureSystemDuration = TimeSpan.FromMinutes(30 + Random.Shared.NextDouble() * 90); // 30-120 minutes
+                                
+                                _logger.LogWarning("HIGH PRESSURE SYSTEM starting at {Time} - Baseline: {Baseline:F1} hPa, Duration: {Duration:F0} minutes", 
+                                    currentTime.ToString("HH:mm:ss"), _highPressureBaseline, _highPressureSystemDuration.TotalMinutes);
+                            }
+                        }
+                        else
+                        {
+                            // In high pressure system - check if it should end
+                            if (currentTime >= _highPressureSystemStart.Add(_highPressureSystemDuration))
+                            {
+                                _isInHighPressureSystem = false;
+                                _logger.LogInformation("High pressure system ending at {Time} after {Duration:F0} minutes", 
+                                    currentTime.ToString("HH:mm:ss"), (currentTime - _highPressureSystemStart).TotalMinutes);
+                            }
+                        }
+                        
+                        double pressure;
+                        if (_isInHighPressureSystem)
+                        {
+                            // High pressure system: stable high pressure with small variations
+                            var systemAge = (currentTime - _highPressureSystemStart).TotalMinutes;
+                            var systemProgress = systemAge / _highPressureSystemDuration.TotalMinutes;
+                            
+                            // Pressure peaks in the middle of the system, tapers at edges
+                            var systemIntensity = Math.Sin(systemProgress * Math.PI); // 0 -> 1 -> 0
+                            var baselinePressure = _highPressureBaseline + systemIntensity * 10; // +0 to +10 hPa at peak
+                            var microVariation = Random.Shared.NextDouble() * 4 - 2; // ±2 hPa small changes
+                            
+                            pressure = baselinePressure + microVariation;
+                        }
+                        else
+                        {
+                            // Normal pressure system: lower baseline with larger variations
+                            var basePressure = 920 + 15 * Math.Sin(minutesSinceStart / 180.0 * Math.PI * 2); // 905-935 hPa base
+                            var normalVariation = Random.Shared.NextDouble() * 12 - 6; // ±6 hPa normal variation
+                            
+                            pressure = basePressure + normalVariation;
+                        }
                         
                         var isHighPressure = pressure > 950;
                         if (isHighPressure) highPressureCount++;
@@ -110,7 +166,7 @@ public class StationWorker : BackgroundService
                             {
                                 StationId = _stationId,
                                 StationType = _stationType,
-                                TimestampUnix = currentTime.ToUnixTimeSeconds(),
+                                TimestampUnix = nextMeasurementTime.ToUnixTimeSeconds(), // Use aligned time, not current time
                                 Value = pressure,
                                 Quality = "Good"
                             }
@@ -129,17 +185,18 @@ public class StationWorker : BackgroundService
                         {
                             if (isHighPressure)
                             {
-                                _logger.LogWarning("Measurement #{Count} HIGH PRESSURE: P={Pressure:F1} hPa at {SimTime} (gRPC: {ElapsedMs}ms) - May trigger temp frequency change!", 
-                                    measurementCount, pressure, currentTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds);
+                                _logger.LogWarning("Measurement #{Count} HIGH PRESSURE: P={Pressure:F1} hPa at aligned time {AlignedTime} (gRPC: {ElapsedMs}ms) - May trigger temp frequency change!", 
+                                    measurementCount, pressure, nextMeasurementTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds);
                             }
                             else
                             {
-                                _logger.LogInformation("Measurement #{Count} submitted successfully: P={Pressure:F1} hPa at {SimTime} (gRPC: {ElapsedMs}ms)", 
-                                    measurementCount, pressure, currentTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds);
+                                _logger.LogInformation("Measurement #{Count} submitted successfully: P={Pressure:F1} hPa at aligned time {AlignedTime} (gRPC: {ElapsedMs}ms)", 
+                                    measurementCount, pressure, nextMeasurementTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds);
                             }
                         }
                         
-                        lastMeasurementTime = currentTime;
+                        // Calculate next aligned measurement time
+                        nextMeasurementTime = _timeAlignment.GetNextAlignedMeasurementTime(nextMeasurementTime, _interval);
                     }
                 }
                 catch (Exception ex)

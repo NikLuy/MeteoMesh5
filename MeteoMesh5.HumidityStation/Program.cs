@@ -1,10 +1,9 @@
-﻿using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
-using Grpc.Net.Client;
+﻿using Grpc.Net.Client;
 using MeteoMesh5.Grpc;
+using MeteoMesh5.Shared.Extensions;
 using MeteoMesh5.Shared.Models;
 using MeteoMesh5.Shared.Services;
-using MeteoMesh5.Shared.Extensions;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
 using Serilog;
 
@@ -37,6 +36,7 @@ public class StationWorker : BackgroundService
     private readonly IOptions<SimulationOptions> _sim; 
     private readonly IConfiguration _cfg; 
     private readonly TimeProvider _timeProvider;
+    private readonly TimeAlignmentService _timeAlignment;
     private GrpcChannel? _channel; 
     private StationIngressService.StationIngressServiceClient? _client; 
     private TimeSpan _interval = TimeSpan.FromMinutes(15);
@@ -45,12 +45,14 @@ public class StationWorker : BackgroundService
     private readonly string _nodeUrl; 
     private bool _suspended = false;
     
-    public StationWorker(ILogger<StationWorker> logger, IOptions<SimulationOptions> sim, IConfiguration cfg, TimeProvider timeProvider)
+    public StationWorker(ILogger<StationWorker> logger, IOptions<SimulationOptions> sim, IConfiguration cfg, 
+        TimeProvider timeProvider, TimeAlignmentService timeAlignment)
     { 
         _logger = logger; 
         _sim = sim; 
         _cfg = cfg; 
         _timeProvider = timeProvider;
+        _timeAlignment = timeAlignment;
         _stationId = _cfg["Station:Id"] ?? "HUM_SIM"; 
         _stationType = "Humidity"; 
         _nodeUrl = _cfg["Station:NodeUrl"] ?? "https://localhost:7101"; 
@@ -82,26 +84,27 @@ public class StationWorker : BackgroundService
             // Start command stream listener
             _ = Task.Run(async () => await ListenForCommands(stoppingToken), stoppingToken);
             
-            var lastMeasurementTime = _timeProvider.GetUtcNow();
+            var currentTime = _timeProvider.GetUtcNow();
+            var nextMeasurementTime = _timeAlignment.GetNextAlignedMeasurementTime(currentTime, _interval);
             
-            _logger.LogInformation("Beginning measurement loop - Initial interval: {IntervalMinutes} minutes, Start time: {StartTime}", 
-                _interval.TotalMinutes, lastMeasurementTime.ToString("HH:mm:ss"));
+            _logger.LogInformation("Beginning measurement loop - Interval: {IntervalMinutes} minutes, Next measurement: {NextTime}", 
+                _interval.TotalMinutes, nextMeasurementTime.ToString("HH:mm:ss"));
             
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var currentTime = _timeProvider.GetUtcNow();
+                    currentTime = _timeProvider.GetUtcNow();
                     
-                    // Check if it's time for the next measurement
-                    if (currentTime >= lastMeasurementTime.Add(_interval))
+                    // Check if we've reached the next aligned measurement time
+                    if (currentTime >= nextMeasurementTime)
                     {
                         measurementCount++;
                         
                         if (!_suspended)
                         {
-                            // Generate humidity value 40-80% + noise
-                            var minutesSinceStart = (currentTime - _sim.Value.StartTime).TotalMinutes;
+                            // Generate humidity value 40-80% + noise using aligned time
+                            var minutesSinceStart = _timeAlignment.GetElapsedMinutes(_sim.Value.StartTime);
                             var humidity = 60 + 15 * Math.Sin(minutesSinceStart / 120.0 * Math.PI * 2) + Random.Shared.NextDouble() * 2;
                             
                             var req = new SubmitMeasurementRequest
@@ -110,7 +113,7 @@ public class StationWorker : BackgroundService
                                 {
                                     StationId = _stationId,
                                     StationType = _stationType,
-                                    TimestampUnix = currentTime.ToUnixTimeSeconds(),
+                                    TimestampUnix = nextMeasurementTime.ToUnixTimeSeconds(), // Use aligned time, not current time
                                     Value = humidity,
                                     Quality = "Good"
                                 }
@@ -127,18 +130,19 @@ public class StationWorker : BackgroundService
                             }
                             else
                             {
-                                _logger.LogInformation("Measurement #{Count} submitted successfully: H={Humidity:F1}% at {SimTime} (gRPC: {ElapsedMs}ms)", 
-                                    measurementCount, humidity, currentTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds);
+                                _logger.LogInformation("Measurement #{Count} submitted successfully: H={Humidity:F1}% at aligned time {AlignedTime} (gRPC: {ElapsedMs}ms)", 
+                                    measurementCount, humidity, nextMeasurementTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds);
                             }
                         }
                         else
                         {
                             suspendedCount++;
-                            _logger.LogWarning("Measurement #{Count} SUSPENDED due to rain detection - Skip #{SkipCount} at {SimTime}", 
-                                measurementCount, suspendedCount, currentTime.ToString("HH:mm:ss"));
+                            _logger.LogWarning("Measurement #{Count} SUSPENDED due to rain detection - Skip #{SkipCount} at aligned time {AlignedTime}", 
+                                measurementCount, suspendedCount, nextMeasurementTime.ToString("HH:mm:ss"));
                         }
                         
-                        lastMeasurementTime = currentTime;
+                        // Calculate next aligned measurement time
+                        nextMeasurementTime = _timeAlignment.GetNextAlignedMeasurementTime(nextMeasurementTime, _interval);
                     }
                 }
                 catch (Exception ex)

@@ -31,6 +31,34 @@ public class RuleEngine
         while (_pending.TryDequeue(out var c)) yield return c;
     }
 
+    public IEnumerable<ControlCommand> DequeueCommandsForStation(string stationId, string stationType)
+    {
+        var commands = new List<ControlCommand>();
+        var tempQueue = new Queue<ControlCommand>();
+        
+        // Dequeue all commands and separate relevant ones
+        while (_pending.TryDequeue(out var cmd))
+        {
+            if ((!string.IsNullOrEmpty(cmd.TargetStationId) && cmd.TargetStationId == stationId) ||
+                (!string.IsNullOrEmpty(cmd.TargetType) && cmd.TargetType.Equals(stationType, StringComparison.OrdinalIgnoreCase)))
+            {
+                commands.Add(cmd);
+            }
+            else
+            {
+                tempQueue.Enqueue(cmd);
+            }
+        }
+        
+        // Put back non-matching commands
+        while (tempQueue.Count > 0)
+        {
+            _pending.Enqueue(tempQueue.Dequeue());
+        }
+        
+        return commands;
+    }
+
     public void Evaluate()
     {
         var states = _registry.All.ToList();

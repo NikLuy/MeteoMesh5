@@ -1,10 +1,9 @@
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
 using Grpc.Net.Client;
 using MeteoMesh5.Grpc;
+using MeteoMesh5.Shared.Extensions;
 using MeteoMesh5.Shared.Models;
 using MeteoMesh5.Shared.Services;
-using MeteoMesh5.Shared.Extensions;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
 using Serilog;
 
@@ -36,19 +35,23 @@ public class StationWorker : BackgroundService
     private readonly IOptions<SimulationOptions> _sim; 
     private readonly IConfiguration _cfg; 
     private readonly TimeProvider _timeProvider;
+    private readonly TimeAlignmentService _timeAlignment;
     private GrpcChannel? _channel; 
     private StationIngressService.StationIngressServiceClient? _client; 
     private TimeSpan _interval = TimeSpan.FromMinutes(15);
     private readonly string _stationId; 
     private readonly string _stationType; 
     private readonly string _nodeUrl;
+    private DateTimeOffset _nextMeasurementTime; // Track next measurement time at class level
     
-    public StationWorker(ILogger<StationWorker> logger, IOptions<SimulationOptions> sim, IConfiguration cfg, TimeProvider timeProvider)
+    public StationWorker(ILogger<StationWorker> logger, IOptions<SimulationOptions> sim, IConfiguration cfg, 
+        TimeProvider timeProvider, TimeAlignmentService timeAlignment)
     { 
         _logger = logger; 
         _sim = sim; 
         _cfg = cfg; 
         _timeProvider = timeProvider;
+        _timeAlignment = timeAlignment;
         _stationId = _cfg["Station:Id"] ?? "TEMP_SIM"; 
         _stationType = "Temperature"; 
         _nodeUrl = _cfg["Station:NodeUrl"] ?? "https://localhost:7101"; 
@@ -78,24 +81,25 @@ public class StationWorker : BackgroundService
             _ = Task.Run(async () => await ListenForCommands(stoppingToken), stoppingToken);
             
             var measurementCount = 0;
-            var lastMeasurementTime = _timeProvider.GetUtcNow();
+            var currentTime = _timeProvider.GetUtcNow();
+            _nextMeasurementTime = _timeAlignment.GetNextAlignedMeasurementTime(currentTime, _interval);
             
-            _logger.LogInformation("Beginning measurement loop - Initial interval: {IntervalMinutes} minutes, Start time: {StartTime}", 
-                _interval.TotalMinutes, lastMeasurementTime.ToString("HH:mm:ss"));
+            _logger.LogInformation("Beginning measurement loop - Interval: {IntervalMinutes} minutes, Next measurement: {NextTime}", 
+                _interval.TotalMinutes, _nextMeasurementTime.ToString("HH:mm:ss"));
             
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var currentTime = _timeProvider.GetUtcNow();
+                    currentTime = _timeProvider.GetUtcNow();
                     
-                    // Check if it's time for the next measurement
-                    if (currentTime >= lastMeasurementTime.Add(_interval))
+                    // Check if we've reached the next aligned measurement time
+                    if (currentTime >= _nextMeasurementTime)
                     {
                         measurementCount++;
                         
-                        // Generate temperature value simple sinus + noise
-                        var minutesSinceStart = (currentTime - _sim.Value.StartTime).TotalMinutes;
+                        // Generate temperature value simple sinus + noise using aligned time
+                        var minutesSinceStart = _timeAlignment.GetElapsedMinutes(_sim.Value.StartTime);
                         var temp = 15 + 10 * Math.Sin(minutesSinceStart / 60.0 * Math.PI * 2) + Random.Shared.NextDouble() * 0.5;
                         
                         var req = new SubmitMeasurementRequest
@@ -104,7 +108,7 @@ public class StationWorker : BackgroundService
                             {
                                 StationId = _stationId,
                                 StationType = _stationType,
-                                TimestampUnix = currentTime.ToUnixTimeSeconds(),
+                                TimestampUnix = _nextMeasurementTime.ToUnixTimeSeconds(), // Use aligned time, not current time
                                 Value = temp,
                                 Quality = "Good"
                             }
@@ -121,11 +125,12 @@ public class StationWorker : BackgroundService
                         }
                         else 
                         {
-                            _logger.LogInformation("Measurement #{Count} submitted successfully: T={Temp:F2}°C at {SimTime} (gRPC: {ElapsedMs}ms, interval: {IntervalMin}min)", 
-                                measurementCount, temp, currentTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds, _interval.TotalMinutes);
+                            _logger.LogInformation("Measurement #{Count} submitted successfully: T={Temp:F2}°C at aligned time {AlignedTime} (gRPC: {ElapsedMs}ms, interval: {IntervalMin}min)", 
+                                measurementCount, temp, _nextMeasurementTime.ToString("HH:mm:ss"), sw.ElapsedMilliseconds, _interval.TotalMinutes);
                         }
                         
-                        lastMeasurementTime = currentTime;
+                        // Calculate next aligned measurement time
+                        _nextMeasurementTime = _timeAlignment.GetNextAlignedMeasurementTime(_nextMeasurementTime, _interval);
                     }
                 }
                 catch (Exception ex) 
@@ -172,8 +177,13 @@ public class StationWorker : BackgroundService
                     case "SetInterval": 
                         var oldInterval = _interval.TotalMinutes;
                         _interval = TimeSpan.FromMinutes(cmd.NumericValue);
-                        _logger.LogWarning("Measurement interval changed from {OldMin} to {NewMin} minutes due to pressure conditions", 
-                            oldInterval, cmd.NumericValue);
+                        
+                        // Calculate next measurement time from the last measurement time, not current time
+                        // This ensures proper alignment continuation regardless of when the command arrives
+                        _nextMeasurementTime = _timeAlignment.GetNextAlignedMeasurementTime(_nextMeasurementTime, _interval);
+                        
+                        _logger.LogWarning("Measurement interval changed from {OldMin} to {NewMin} minutes due to pressure conditions. Next measurement: {NextTime}", 
+                            oldInterval, cmd.NumericValue, _nextMeasurementTime.ToString("HH:mm:ss"));
                         break;
                     default:
                         _logger.LogWarning("Unknown command action: {Action}", cmd.Action);

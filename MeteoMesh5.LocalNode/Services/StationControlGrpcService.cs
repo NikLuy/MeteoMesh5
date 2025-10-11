@@ -36,9 +36,7 @@ public class StationControlGrpcService : StationControlService.StationControlSer
         
         while (!context.CancellationToken.IsCancellationRequested)
         {
-            foreach (var cmd in _engine.DequeueCommands().Where(c =>
-                (!string.IsNullOrEmpty(c.TargetStationId) && c.TargetStationId == request.StationId) ||
-                (!string.IsNullOrEmpty(c.TargetType) && c.TargetType.Equals(request.StationType, StringComparison.OrdinalIgnoreCase))))
+            foreach (var cmd in _engine.DequeueCommandsForStation(request.StationId, request.StationType))
             {
                 _logger.LogInformation("Streaming command {Action} to {StationId} (CommandId: {CommandId})", 
                     cmd.Action, request.StationId, cmd.CommandId);

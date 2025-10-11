@@ -44,4 +44,7 @@
     <Protobuf Include="Protos\localnodedata.proto" GrpcServices="Server" />
     <ProjectReference Include="..\MeteoMesh5.Shared\MeteoMesh5.Shared.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Logs\" />
+  </ItemGroup>
 </Project>
