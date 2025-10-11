@@ -42,18 +42,6 @@ dotnet test
 dotnet test MeteoMesh5.CentralServer.Tests
 ```
 
-### Docker-Entwicklung (Optional)
-
-Für lokale Docker-Entwicklung können Sie auch Docker Compose verwenden:
-
-```bash
-# Alle Services mit Docker Compose starten
-docker-compose up --build
-
-# Nur spezifische Services starten
-docker-compose up central-server local-node
-```
-
 ## Konfiguration (appsettings.json)
 
 ### MeteoMesh5.Host (Aspire AppHost) Konfiguration
